@@ -27,7 +27,7 @@ impl SlackWebhook {
     }
 }
 
-impl WebhookSignature for SlackWebhook {
+impl Webhook for SlackWebhook {
     type MAC = Hmac<Sha256>;
 
     fn name() -> &'static str {

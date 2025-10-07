@@ -4,17 +4,13 @@ use hmac::Mac;
 use rocket::{
     Request, async_trait,
     data::{FromData, Outcome, ToByteUnit},
-    futures::{Stream, StreamExt},
     http::{HeaderMap, Status},
     outcome::try_outcome,
     serde::{DeserializeOwned, json::serde_json},
 };
-use tokio_util::{
-    bytes::{Bytes, BytesMut},
-    io::ReaderStream,
-};
+use tokio_util::io::ReaderStream;
 
-use crate::{RocketWebhook, webhooks::WebhookSignature};
+use crate::{RocketWebhook, webhooks::Webhook};
 
 /// Data guard to validate and deserialize the `W` webhook JSON body into the `T` type.
 /// The `W` webhook must be attached to Rocket using [RocketWebhook](crate::RocketWebhook).
@@ -30,7 +26,8 @@ pub struct WebhookPayload<'r, W, T> {
 impl<'r, W, T> FromData<'r> for WebhookPayload<'r, W, T>
 where
     T: DeserializeOwned,
-    W: WebhookSignature + Send + Sync + 'static,
+    W: Webhook + Send + Sync + 'static,
+    W::MAC: Sync,
 {
     type Error = String;
 
@@ -42,26 +39,13 @@ where
             .rocket()
             .state::<RocketWebhook<W>>()
             .expect("the webhook was not found in Rocket's state");
-        let headers = req.headers();
 
         // Get expected signature from request
         let expected_signature = try_outcome!(config.webhook.expected_signature(req));
 
-        // Initialize HMAC with secret key from webhook
-        let key = config.webhook.secret_key();
-        let mut mac = W::MAC::new_from_slice(key).expect("HMAC should take any key length");
-
-        // Update HMAC with prefix if there is one
-        if let Some(prefix) = try_outcome!(config.webhook.body_prefix(req)) {
-            mac.update(&prefix);
-        }
-
         // Read body stream while calculating HMAC
         let body_stream = ReaderStream::new(data.open(config.max_body_size.bytes()));
-        let raw_body = match read_body_and_hmac(body_stream, &mut mac, body_size(headers)).await {
-            Ok(bytes) => bytes,
-            Err(e) => return Outcome::Error((Status::BadRequest, format!("Body read error: {e}"))),
-        };
+        let (body, mac) = try_outcome!(config.webhook.read_body_and_hmac(req, body_stream).await);
 
         // Verify signature
         if let Err(e) = mac.verify_slice(&expected_signature) {
@@ -69,10 +53,10 @@ where
         }
 
         // Deserialize JSON body
-        match serde_json::from_slice(&raw_body) {
+        match serde_json::from_slice(&body) {
             Ok(data) => Outcome::Success(Self {
                 data,
-                headers,
+                headers: req.headers(),
                 _marker: PhantomData,
             }),
             Err(e) => Outcome::Error((Status::BadRequest, format!("Deserialize error: {e}"))),
@@ -93,7 +77,8 @@ pub struct WebhookPayloadRaw<'r, W> {
 #[async_trait]
 impl<'r, W> FromData<'r> for WebhookPayloadRaw<'r, W>
 where
-    W: WebhookSignature + Send + Sync + 'static,
+    W: Webhook + Send + Sync + 'static,
+    W::MAC: Sync,
 {
     type Error = String;
 
@@ -101,30 +86,14 @@ where
         req: &'r Request<'_>,
         data: rocket::Data<'r>,
     ) -> Outcome<'r, Self, Self::Error> {
-        let config = req
-            .rocket()
-            .state::<RocketWebhook<W>>()
-            .expect("the webhook was not found in Rocket's state");
-        let headers = req.headers();
+        let config: &RocketWebhook<W> = try_outcome!(get_webhook_from_state(req));
 
         // Get expected signature from request
         let expected_signature = try_outcome!(config.webhook.expected_signature(req));
 
-        // Initialize HMAC with secret key from webhook
-        let key = config.webhook.secret_key();
-        let mut mac = W::MAC::new_from_slice(key).expect("HMAC should take any key length");
-
-        // Update HMAC with prefix if there is one
-        if let Some(prefix) = try_outcome!(config.webhook.body_prefix(req)) {
-            mac.update(&prefix);
-        }
-
         // Read body stream while calculating HMAC
         let body_stream = ReaderStream::new(data.open(config.max_body_size.bytes()));
-        let raw_body = match read_body_and_hmac(body_stream, &mut mac, body_size(headers)).await {
-            Ok(bytes) => bytes,
-            Err(e) => return Outcome::Error((Status::BadRequest, format!("Body read error: {e}"))),
-        };
+        let (body, mac) = try_outcome!(config.webhook.read_body_and_hmac(req, body_stream).await);
 
         // Verify signature
         if let Err(e) = mac.verify_slice(&expected_signature) {
@@ -132,36 +101,24 @@ where
         }
 
         Outcome::Success(Self {
-            data: raw_body.into(),
-            headers,
+            data: body.into(),
+            headers: req.headers(),
             _marker: PhantomData,
         })
     }
 }
 
-async fn read_body_and_hmac<M>(
-    mut stream: impl Stream<Item = Result<Bytes, rocket::tokio::io::Error>> + Unpin,
-    mac: &mut M,
-    init_size: Option<usize>,
-) -> Result<Bytes, rocket::tokio::io::Error>
+fn get_webhook_from_state<'r, W>(req: &'r Request) -> Outcome<'r, &'r RocketWebhook<W>, String>
 where
-    M: Mac,
+    W: Webhook + Send + Sync + 'static,
 {
-    let mut raw_body = BytesMut::with_capacity(init_size.unwrap_or(512));
-    while let Some(chunk_result) = stream.next().await {
-        match chunk_result {
-            Ok(chunk_bytes) => {
-                mac.update(&chunk_bytes);
-                raw_body.extend(chunk_bytes);
-            }
-            Err(e) => return Err(e),
+    match req.rocket().state::<RocketWebhook<W>>() {
+        Some(config) => Outcome::Success(config),
+        None => {
+            return Outcome::Error((
+                Status::InternalServerError,
+                format!("the {} webhook is not attached to Rocket", W::name()),
+            ));
         }
     }
-    Ok(raw_body.freeze())
-}
-
-fn body_size(headers: &HeaderMap) -> Option<usize> {
-    headers
-        .get_one("Content-Length")
-        .and_then(|len| len.parse().ok())
 }

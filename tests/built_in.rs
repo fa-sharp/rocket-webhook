@@ -17,7 +17,7 @@ struct GithubPayload {
 }
 
 #[get("/github", data = "<payload>")]
-async fn github_webhook(
+async fn github_route(
     payload: WebhookPayload<'_, GitHubWebhook, GithubPayload>,
 ) -> Json<GithubPayload> {
     Json(payload.data)
@@ -28,9 +28,10 @@ fn github() {
     let github_webhook = GitHubWebhook::builder()
         .secret_key(b"test-secret".to_vec())
         .build();
-    let webhook = RocketWebhook::builder().webhook(github_webhook).build();
-    let mut rocket = rocket::build().mount("/", routes![github_webhook]);
-    rocket = webhook.register(rocket);
+    let rocket_webhook = RocketWebhook::builder().webhook(github_webhook).build();
+
+    let mut rocket = rocket::build().mount("/", routes![github_route]);
+    rocket = rocket_webhook.register_with(rocket);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = json!({"action": "opened"});
@@ -60,7 +61,7 @@ fn github() {
 }
 
 #[get("/slack", data = "<payload>")]
-async fn slack_webhook(payload: WebhookPayloadRaw<'_, SlackWebhook>) -> Vec<u8> {
+async fn slack_route(payload: WebhookPayloadRaw<'_, SlackWebhook>) -> Vec<u8> {
     payload.data
 }
 
@@ -70,8 +71,8 @@ fn slack() {
         .secret_key(b"8f742231b10e8888abcd99yyyzzz85a5".to_vec())
         .build();
     let webhook = RocketWebhook::builder().webhook(slack_webhook).build();
-    let mut rocket = rocket::build().mount("/", routes![slack_webhook]);
-    rocket = webhook.register(rocket);
+    let mut rocket = rocket::build().mount("/", routes![slack_route]);
+    rocket = webhook.register_with(rocket);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = "token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J&team_domain=testteamnow&channel_id=G8PSS9T3V&channel_name=foobar&user_id=U2CERLKJA&user_name=roadrunner&command=%2Fwebhook-collect&text=&response_url=https%3A%2F%2Fhooks.slack.com%2Fcommands%2FT1DC2JH3J%2F397700885554%2F96rGlfmibIGlgcZRskXaIFfN&trigger_id=398738663015.47445629121.803a0bc887a14d10d2c447fce8b6703c";
@@ -85,6 +86,7 @@ fn slack() {
         .dispatch();
 
     assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.into_string(), Some(payload.into()));
 
     let wrong_signature = "v0=a3114d57b48eac39b9ad189dd8316235a7b4a8d21a10bd27519666489c69b503";
     let response = client

@@ -1,3 +1,57 @@
+/*!
+# Overview
+
+Utilities for working with webhooks in Rocket applications.
+
+- Automatically validate and deserialize webhook JSON payloads using the [WebhookPayload] data guard. You can also
+get the raw body using [WebhookPayloadRaw].
+- Common webhook validators included (GitHub, Slack)
+- Custom webhook validation possible via implementing the [Webhook] trait.
+
+# Usage
+
+```rust
+use rocket::{routes, post, serde::{Serialize, Deserialize}};
+use rocket_webhook::{
+    RocketWebhook, WebhookPayload,
+    webhooks::built_in::{GitHubWebhook},
+};
+
+
+#[rocket::launch]
+fn rocket() -> _ {
+    let github_webhook = GitHubWebhook::builder()
+        .secret_key(b"my-github-secret".to_vec())
+        .build();
+    let rocket_webhook = RocketWebhook::builder().webhook(github_webhook).build();
+
+    let rocket = rocket::build().mount("/", routes![github_route]);
+
+    rocket_webhook.register_with(rocket)
+}
+
+// use the `WebhookPayload` data guard in a route handler
+#[post("/api/webhooks/github", data = "<payload>")]
+async fn github_route(
+    payload: WebhookPayload<'_, GitHubWebhook, GithubPayload>,
+) -> &'static str {
+    payload.data; // access the validated webhook payload
+    payload.headers; // access the webhook headers
+
+    "OK"
+}
+
+/// Payload to deserialize
+#[derive(Debug, Serialize, Deserialize)]
+struct GithubPayload {
+    action: String,
+}
+
+```
+
+
+*/
+
 use bon::Builder;
 use rocket::{Build, Rocket, async_trait, fairing};
 
@@ -5,7 +59,7 @@ mod guard;
 pub mod webhooks;
 pub use guard::{WebhookPayload, WebhookPayloadRaw};
 
-use crate::webhooks::WebhookSignature;
+use crate::webhooks::Webhook;
 
 /**
 A webhook managed by Rocket. When registered with the Rocket server, you can use
@@ -13,11 +67,28 @@ the [WebhookPayload] and [WebhookPayloadRaw] data guards in your routes to autom
 validate and retrieve the webhook data.
 
 # Example
+
+```
+use rocket::{Rocket, Build};
+use rocket_webhook::{
+    RocketWebhook,
+    webhooks::built_in::{GitHubWebhook, SlackWebhook},
+};
+
+fn setup_webhooks(rocket: Rocket<Build>) -> Rocket<Build> {
+    let github_webhook = GitHubWebhook::builder()
+        .secret_key(b"my-github-secret".to_vec())
+        .build();
+    let rocket_webhook = RocketWebhook::builder().webhook(github_webhook).build();
+
+    rocket_webhook.register_with(rocket)
+}
+```
 */
 #[derive(Debug, Builder)]
 pub struct RocketWebhook<W>
 where
-    W: WebhookSignature + Send + Sync + 'static,
+    W: Webhook + Send + Sync + 'static,
 {
     /// The webhook to validate
     webhook: W,
@@ -28,10 +99,10 @@ where
 
 impl<W> RocketWebhook<W>
 where
-    W: WebhookSignature + Send + Sync + 'static,
+    W: Webhook + Send + Sync + 'static,
 {
     /// Register this webhook with the Rocket server
-    pub fn register(self, rocket: Rocket<Build>) -> Rocket<Build> {
+    pub fn register_with(self, rocket: Rocket<Build>) -> Rocket<Build> {
         rocket
             .attach(RocketWebhookFairing { name: W::name() })
             .manage(self)

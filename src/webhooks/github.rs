@@ -24,7 +24,7 @@ impl GitHubWebhook {
     }
 }
 
-impl WebhookSignature for GitHubWebhook {
+impl Webhook for GitHubWebhook {
     type MAC = Hmac<Sha256>;
 
     fn name() -> &'static str {
