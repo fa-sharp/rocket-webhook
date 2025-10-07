@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use hmac::Mac;
 use rocket::{
     Request, async_trait,
     data::{FromData, Outcome, ToByteUnit},
@@ -8,7 +7,6 @@ use rocket::{
     outcome::try_outcome,
     serde::{DeserializeOwned, json::serde_json},
 };
-use tokio_util::io::ReaderStream;
 
 use crate::{RocketWebhook, webhooks::Webhook};
 
@@ -27,7 +25,6 @@ impl<'r, W, T> FromData<'r> for WebhookPayload<'r, W, T>
 where
     T: DeserializeOwned,
     W: Webhook + Send + Sync + 'static,
-    W::MAC: Sync,
 {
     type Error = String;
 
@@ -35,25 +32,11 @@ where
         req: &'r Request<'_>,
         data: rocket::Data<'r>,
     ) -> Outcome<'r, Self, Self::Error> {
-        let config = req
-            .rocket()
-            .state::<RocketWebhook<W>>()
-            .expect("the webhook was not found in Rocket's state");
+        let config: &RocketWebhook<W> = try_outcome!(get_webhook_from_state(req));
+        let body = data.open(config.max_body_size.bytes());
+        let validated_body = try_outcome!(config.webhook.read_body_and_validate(req, body).await);
 
-        // Get expected signature from request
-        let expected_signature = try_outcome!(config.webhook.expected_signature(req));
-
-        // Read body stream while calculating HMAC
-        let body_stream = ReaderStream::new(data.open(config.max_body_size.bytes()));
-        let (body, mac) = try_outcome!(config.webhook.read_body_and_hmac(req, body_stream).await);
-
-        // Verify signature
-        if let Err(e) = mac.verify_slice(&expected_signature) {
-            return Outcome::Error((Status::BadRequest, format!("Invalid signature: {e}")));
-        }
-
-        // Deserialize JSON body
-        match serde_json::from_slice(&body) {
+        match serde_json::from_slice(&validated_body) {
             Ok(data) => Outcome::Success(Self {
                 data,
                 headers: req.headers(),
@@ -78,7 +61,6 @@ pub struct WebhookPayloadRaw<'r, W> {
 impl<'r, W> FromData<'r> for WebhookPayloadRaw<'r, W>
 where
     W: Webhook + Send + Sync + 'static,
-    W::MAC: Sync,
 {
     type Error = String;
 
@@ -87,21 +69,11 @@ where
         data: rocket::Data<'r>,
     ) -> Outcome<'r, Self, Self::Error> {
         let config: &RocketWebhook<W> = try_outcome!(get_webhook_from_state(req));
-
-        // Get expected signature from request
-        let expected_signature = try_outcome!(config.webhook.expected_signature(req));
-
-        // Read body stream while calculating HMAC
-        let body_stream = ReaderStream::new(data.open(config.max_body_size.bytes()));
-        let (body, mac) = try_outcome!(config.webhook.read_body_and_hmac(req, body_stream).await);
-
-        // Verify signature
-        if let Err(e) = mac.verify_slice(&expected_signature) {
-            return Outcome::Error((Status::BadRequest, format!("Invalid signature: {e}")));
-        }
+        let body = data.open(config.max_body_size.bytes());
+        let validated_body = try_outcome!(config.webhook.read_body_and_validate(req, body).await);
 
         Outcome::Success(Self {
-            data: body.into(),
+            data: validated_body,
             headers: req.headers(),
             _marker: PhantomData,
         })

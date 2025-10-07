@@ -26,11 +26,22 @@ impl ShopifyWebhook {
 }
 
 impl Webhook for ShopifyWebhook {
-    type MAC = Hmac<Sha256>;
-
     fn name() -> &'static str {
         "Shopify webhook"
     }
+
+    async fn read_body_and_validate<'r>(
+        &self,
+        req: &'r Request<'_>,
+        body: impl AsyncRead + Unpin + Send + Sync,
+    ) -> Outcome<Vec<u8>, String> {
+        let raw_body = try_outcome!(self.read_body_and_hmac(req, body).await);
+        Outcome::Success(raw_body)
+    }
+}
+
+impl WebhookHmac for ShopifyWebhook {
+    type MAC = Hmac<Sha256>;
 
     fn secret_key(&self) -> &[u8] {
         &self.secret_key

@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 /*!
 # Overview
 
@@ -80,9 +83,11 @@ fn setup_webhooks(rocket: Rocket<Build>) -> Rocket<Build> {
     let github_webhook = GitHubWebhook::builder()
         .secret_key(b"my-github-secret".to_vec())
         .build();
-    let rocket_webhook = RocketWebhook::builder().webhook(github_webhook).build();
 
-    rocket_webhook.register_with(rocket)
+    RocketWebhook::builder()
+        .webhook(github_webhook)
+        .build()
+        .register_with(rocket)
 }
 ```
 */
