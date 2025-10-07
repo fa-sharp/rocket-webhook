@@ -37,7 +37,7 @@ impl Webhook for ShopifyWebhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> Outcome<Vec<u8>, String> {
+    ) -> Outcome<'_, Vec<u8>, String> {
         let raw_body = try_outcome!(self.read_body_and_hmac(req, body).await);
         Outcome::Success(raw_body)
     }
@@ -50,7 +50,7 @@ impl WebhookHmac for ShopifyWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<Vec<u8>, String> {
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String> {
         let sig_header = try_outcome!(self.get_header(req, "X-Shopify-Hmac-Sha256", None));
         match BASE64_STANDARD.decode(sig_header) {
             Ok(bytes) => Outcome::Success(bytes),

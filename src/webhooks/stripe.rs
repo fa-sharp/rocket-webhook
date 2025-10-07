@@ -42,7 +42,7 @@ impl Webhook for StripeWebhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> Outcome<Vec<u8>, String> {
+    ) -> Outcome<'_, Vec<u8>, String> {
         let raw_body = try_outcome!(self.read_body_and_hmac(req, body).await);
         Outcome::Success(raw_body)
     }
@@ -55,7 +55,7 @@ impl WebhookHmac for StripeWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<Vec<u8>, String> {
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String> {
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
         let Some(signature) = header.split(',').find_map(|part| part.strip_prefix("v1=")) else {
             return Outcome::Error((
@@ -72,7 +72,7 @@ impl WebhookHmac for StripeWebhook {
         }
     }
 
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<Option<Vec<u8>>, String> {
+    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, String> {
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
         let Some(time) = header.split(',').find_map(|part| part.strip_prefix("t=")) else {
             return Outcome::Error((

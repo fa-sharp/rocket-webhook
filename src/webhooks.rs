@@ -34,7 +34,7 @@ pub trait Webhook {
         &self,
         req: &'r Request<'_>,
         body_reader: impl AsyncRead + Unpin + Send + Sync,
-    ) -> impl Future<Output = Outcome<Vec<u8>, String>> + Send + Sync;
+    ) -> impl Future<Output = Outcome<'_, Vec<u8>, String>> + Send + Sync;
 
     /// Retrieve a header that's expected for a webhook request. The default
     /// implementation looks for the header and returns an error if it was not provided.
@@ -44,7 +44,7 @@ pub trait Webhook {
         req: &'r Request<'_>,
         name: &str,
         prefix: Option<&str>,
-    ) -> Outcome<&'r str, String> {
+    ) -> Outcome<'_, &'r str, String> {
         match req.headers().get_one(name) {
             Some(value) => match prefix {
                 None => Outcome::Success(value),
@@ -71,7 +71,7 @@ pub trait WebhookHmac: Webhook {
 
     /// Get the expected signature from the request. To obtain required headers,
     /// you can use the `self.get_header()` utility.
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<Vec<u8>, String>;
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String>;
 
     /// Read the request body and verify the HMAC signature. The default implementation calculates the HMAC
     /// directly from the raw streamed body (with a prefix if configured). You can provide your own implementation
@@ -80,7 +80,7 @@ pub trait WebhookHmac: Webhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> impl Future<Output = Outcome<Vec<u8>, String>> + Send + Sync
+    ) -> impl Future<Output = Outcome<'_, Vec<u8>, String>> + Send + Sync
     where
         Self: Sync,
         Self::MAC: Sync,
@@ -128,7 +128,7 @@ pub trait WebhookHmac: Webhook {
 
     /// An optional prefix to attach to the raw body when calculating the signature
     #[allow(unused_variables)]
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<Option<Vec<u8>>, String> {
+    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, String> {
         Outcome::Success(None)
     }
 }

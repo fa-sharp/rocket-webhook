@@ -6,6 +6,8 @@ on:
       - tests/**
       - Cargo.toml
       - Cargo.lock
+env:
+  RUST_VERSION: 1.90
 
 jobs:
   test:
@@ -14,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
-        run: rustup toolchain install stable --profile minimal --no-self-update
+        run: rustup toolchain install ${{ env.RUST_VERSION }} --profile minimal --no-self-update
       - name: Setup rust-cache
         uses: Swatinem/rust-cache@v2
       - name: Install nextest
