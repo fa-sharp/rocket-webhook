@@ -8,35 +8,41 @@ Utilities for working with webhooks in Rocket applications.
 
 - Automatically validate and deserialize webhook JSON payloads using the [WebhookPayload] data guard. You can also
 get the raw body using [WebhookPayloadRaw].
-- Common webhook validators included (GitHub, Slack)
-- Custom webhook validation possible via implementing the [Webhook] trait.
+- [Common webhooks](webhooks::built_in) included (GitHub, Slack, Stripe)
+- Custom webhook validation possible by implementing the [Webhook] trait.
 
 # Usage
 
 ```rust
 use rocket::{routes, post, serde::{Serialize, Deserialize}};
 use rocket_webhook::{
-    RocketWebhook, WebhookPayload,
-    webhooks::built_in::{GitHubWebhook},
+    RocketWebhook, RocketWebhookRegister, WebhookPayload,
+    webhooks::built_in::{GitHubWebhook, SlackWebhook},
 };
 
 
 #[rocket::launch]
 fn rocket() -> _ {
-    let github_webhook = GitHubWebhook::builder()
-        .secret_key(b"my-github-secret".to_vec())
+    let github_webhook = RocketWebhook::builder()
+        .webhook(GitHubWebhook::new("GitHub webhook", b"my-github-secret".to_vec()))
         .build();
-    let rocket_webhook = RocketWebhook::builder().webhook(github_webhook).build();
+    let slack_webhook = RocketWebhook::builder()
+        .webhook(SlackWebhook::new("Slack webhook", b"my-slack-secret".to_vec()))
+        .build();
 
     let rocket = rocket::build().mount("/", routes![github_route]);
+    let rocket = RocketWebhookRegister::new(rocket)
+        .add(github_webhook)
+        .add(slack_webhook)
+        .register();
 
-    rocket_webhook.register_with(rocket)
+    rocket
 }
 
 // use the `WebhookPayload` data guard in a route handler
 #[post("/api/webhooks/github", data = "<payload>")]
 async fn github_route(
-    payload: WebhookPayload<'_, GitHubWebhook, GithubPayload>,
+    payload: WebhookPayload<'_, GithubPayload, GitHubWebhook>,
 ) -> &'static str {
     payload.data; // access the validated webhook payload
     payload.headers; // access the webhook headers
@@ -55,6 +61,8 @@ struct GithubPayload {
 
 */
 
+use std::marker::PhantomData;
+
 use bon::Builder;
 use rocket::{Build, Rocket, async_trait, fairing};
 
@@ -66,52 +74,99 @@ pub use hmac;
 use crate::webhooks::Webhook;
 
 /**
-A webhook managed by Rocket. When registered with the Rocket server, you can use
-the [WebhookPayload] and [WebhookPayloadRaw] data guards in your routes to automatically
-validate and retrieve the webhook data.
+Webhook configuration stored in Rocket state.
 
 # Example
 
 ```
 use rocket::{Rocket, Build};
 use rocket_webhook::{
-    RocketWebhook,
+    RocketWebhook, RocketWebhookRegister,
     webhooks::built_in::{GitHubWebhook, SlackWebhook},
 };
 
 fn setup_webhooks(rocket: Rocket<Build>) -> Rocket<Build> {
-    let github_webhook = GitHubWebhook::builder()
-        .secret_key(b"my-github-secret".to_vec())
+    let github_webhook = RocketWebhook::builder()
+        .webhook(GitHubWebhook::new("GitHub webhook", b"my-github-secret".to_vec()))
+        .max_body_size(1024 * 10)
         .build();
+    let rocket = RocketWebhookRegister::new(rocket).add(github_webhook).register();
 
-    RocketWebhook::builder()
-        .webhook(github_webhook)
-        .build()
-        .register_with(rocket)
+    rocket
 }
 ```
 */
-#[derive(Debug, Builder)]
-pub struct RocketWebhook<W>
-where
-    W: Webhook + Send + Sync + 'static,
-{
+#[derive(Builder)]
+pub struct RocketWebhook<W, D = W> {
     /// The webhook to validate
     webhook: W,
-    /// The max body size of the webhook request in bytes (default: 10 KB)
-    #[builder(default = 1024 * 10)]
+    /// The max body size of the webhook request in bytes (default: 64 KB)
+    #[builder(default = 1024 * 64)]
     max_body_size: u32,
+    /// A marker to distinguish between webhooks of the same type
+    #[builder(default, with = |d: D| PhantomData)]
+    _marker: PhantomData<D>,
 }
 
-impl<W> RocketWebhook<W>
-where
-    W: Webhook + Send + Sync + 'static,
-{
-    /// Register this webhook with the Rocket server
-    pub fn register_with(self, rocket: Rocket<Build>) -> Rocket<Build> {
-        rocket
-            .attach(RocketWebhookFairing { name: W::name() })
-            .manage(self)
+/**
+Utility to register webhooks with the Rocket instance
+
+# Example
+```
+use rocket::{Rocket, Build};
+use rocket_webhook::{
+    RocketWebhook, RocketWebhookRegister,
+    webhooks::built_in::{GitHubWebhook},
+};
+
+let rocket = rocket::build();
+let github_webhook = RocketWebhook::builder()
+    .webhook(GitHubWebhook::new("GitHub webhook", b"my-github-secret".to_vec()))
+    .build();
+let rocket = RocketWebhookRegister::new(rocket).add(github_webhook).register();
+```
+*/
+pub struct RocketWebhookRegister {
+    rocket: Rocket<Build>,
+}
+
+impl RocketWebhookRegister {
+    pub fn new(rocket: Rocket<Build>) -> Self {
+        Self { rocket }
+    }
+
+    /// Add a webhook
+    pub fn add<W>(mut self, webhook: RocketWebhook<W>) -> Self
+    where
+        W: Webhook + Send + Sync + 'static,
+    {
+        self.rocket = self
+            .rocket
+            .attach(RocketWebhookFairing {
+                name: webhook.webhook.name(),
+            })
+            .manage(webhook);
+        self
+    }
+
+    /// Add a webhook with a type marker (for using multiple webhooks of the same type)
+    pub fn add_with_marker<W, D>(mut self, webhook: RocketWebhook<W, D>) -> Self
+    where
+        W: Webhook + Send + Sync + 'static,
+        D: Send + Sync + 'static,
+    {
+        self.rocket = self
+            .rocket
+            .attach(RocketWebhookFairing {
+                name: webhook.webhook.name(),
+            })
+            .manage(webhook);
+        self
+    }
+
+    /// Finalize and return the Rocket instance
+    pub fn register(self) -> Rocket<Build> {
+        self.rocket
     }
 }
 

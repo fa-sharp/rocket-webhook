@@ -27,7 +27,7 @@ pub mod built_in {
 /// Shared interface for all webhooks
 pub trait Webhook {
     /// Name of the webhook
-    fn name() -> &'static str;
+    fn name(&self) -> &'static str;
 
     /// Read body and validate webhook.
     fn read_body_and_validate<'r>(

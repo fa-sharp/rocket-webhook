@@ -1,4 +1,4 @@
-use bon::bon;
+use bon::Builder;
 use hmac::Hmac;
 use rocket::outcome::try_outcome;
 use sha2::Sha256;
@@ -14,15 +14,18 @@ use super::*;
 /// Signature should be a digest of `<timestamp>.<body>`
 ///
 /// [Stripe docs](https://docs.stripe.com/webhooks?verify=verify-manually#verify-manually)
+#[derive(Builder)]
 pub struct StripeWebhook {
+    #[builder(default = "Stripe webhook")]
+    name: &'static str,
+    #[builder(with = |secret: Vec<u8>| Zeroizing::new(secret))]
     secret_key: Zeroizing<Vec<u8>>,
 }
 
-#[bon]
 impl StripeWebhook {
-    #[builder]
-    pub fn new(secret_key: Vec<u8>) -> Self {
+    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
         Self {
+            name,
             secret_key: Zeroizing::new(secret_key),
         }
     }
@@ -31,8 +34,8 @@ impl StripeWebhook {
 const SIG_HEADER: &str = "Stripe-Signature";
 
 impl Webhook for StripeWebhook {
-    fn name() -> &'static str {
-        "Stripe webhook"
+    fn name(&self) -> &'static str {
+        self.name
     }
 
     async fn read_body_and_validate<'r>(

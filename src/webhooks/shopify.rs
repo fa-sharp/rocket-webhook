@@ -1,5 +1,5 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use bon::bon;
+use bon::Builder;
 use hmac::Hmac;
 use rocket::outcome::try_outcome;
 use sha2::Sha256;
@@ -11,23 +11,26 @@ use super::*;
 /// Looks for base64 signature in `X-Shopify-Hmac-Sha256` header
 ///
 /// [Shopify docs](https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-5-verify-the-webhook)
+#[derive(Builder)]
 pub struct ShopifyWebhook {
+    #[builder(default = "Shopify webhook")]
+    name: &'static str,
+    #[builder(with = |secret: Vec<u8>| Zeroizing::new(secret))]
     secret_key: Zeroizing<Vec<u8>>,
 }
 
-#[bon]
 impl ShopifyWebhook {
-    #[builder]
-    pub fn new(secret_key: Vec<u8>) -> Self {
+    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
         Self {
+            name,
             secret_key: Zeroizing::new(secret_key),
         }
     }
 }
 
 impl Webhook for ShopifyWebhook {
-    fn name() -> &'static str {
-        "Shopify webhook"
+    fn name(&self) -> &'static str {
+        self.name
     }
 
     async fn read_body_and_validate<'r>(

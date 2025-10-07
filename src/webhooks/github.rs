@@ -1,4 +1,4 @@
-use bon::bon;
+use bon::Builder;
 use hmac::Hmac;
 use rocket::outcome::try_outcome;
 use sha2::Sha256;
@@ -10,23 +10,26 @@ use super::*;
 /// Looks for hex signature in `X-Hub-Signature-256` header, with a 'sha256=' prefix
 ///
 /// [GitHub docs](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries)
+#[derive(Builder)]
 pub struct GitHubWebhook {
+    #[builder(default = "GitHub webhook")]
+    name: &'static str,
+    #[builder(with = |secret: Vec<u8>| Zeroizing::new(secret))]
     secret_key: Zeroizing<Vec<u8>>,
 }
 
-#[bon]
 impl GitHubWebhook {
-    #[builder]
-    pub fn new(secret_key: Vec<u8>) -> Self {
+    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
         Self {
+            name,
             secret_key: Zeroizing::new(secret_key),
         }
     }
 }
 
 impl Webhook for GitHubWebhook {
-    fn name() -> &'static str {
-        "GitHub webhook"
+    fn name(&self) -> &'static str {
+        self.name
     }
 
     async fn read_body_and_validate<'r>(

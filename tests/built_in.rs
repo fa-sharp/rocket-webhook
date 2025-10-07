@@ -6,7 +6,7 @@ use rocket::{
     serde::json::{Json, json},
 };
 use rocket_webhook::{
-    RocketWebhook, WebhookPayload, WebhookPayloadRaw,
+    RocketWebhook, RocketWebhookRegister, WebhookPayload, WebhookPayloadRaw,
     webhooks::built_in::{GitHubWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook},
 };
 use serde::{Deserialize, Serialize};
@@ -18,20 +18,24 @@ struct GithubPayload {
 
 #[get("/github", data = "<payload>")]
 async fn github_route(
-    payload: WebhookPayload<'_, GitHubWebhook, GithubPayload>,
+    payload: WebhookPayload<'_, GithubPayload, GitHubWebhook>,
 ) -> Json<GithubPayload> {
     Json(payload.data)
 }
 
 #[test]
 fn github() {
-    let github_webhook = GitHubWebhook::builder()
-        .secret_key(b"test-secret".to_vec())
+    let github_webhook = RocketWebhook::builder()
+        .webhook(GitHubWebhook::new(
+            "GitHub webhook",
+            b"test-secret".to_vec(),
+        ))
         .build();
-    let rocket_webhook = RocketWebhook::builder().webhook(github_webhook).build();
 
-    let mut rocket = rocket::build().mount("/", routes![github_route]);
-    rocket = rocket_webhook.register_with(rocket);
+    let rocket = rocket::build().mount("/", routes![github_route]);
+    let rocket = RocketWebhookRegister::new(rocket)
+        .add(github_webhook)
+        .register();
 
     let client = Client::tracked(rocket).unwrap();
     let payload = json!({"action": "opened"});
@@ -71,8 +75,10 @@ fn slack() {
         .secret_key(b"8f742231b10e8888abcd99yyyzzz85a5".to_vec())
         .build();
     let webhook = RocketWebhook::builder().webhook(slack_webhook).build();
-    let mut rocket = rocket::build().mount("/", routes![slack_route]);
-    rocket = webhook.register_with(rocket);
+    let rocket = RocketWebhookRegister::new(rocket::build())
+        .add(webhook)
+        .register()
+        .mount("/", routes![slack_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = "token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J&team_domain=testteamnow&channel_id=G8PSS9T3V&channel_name=foobar&user_id=U2CERLKJA&user_name=roadrunner&command=%2Fwebhook-collect&text=&response_url=https%3A%2F%2Fhooks.slack.com%2Fcommands%2FT1DC2JH3J%2F397700885554%2F96rGlfmibIGlgcZRskXaIFfN&trigger_id=398738663015.47445629121.803a0bc887a14d10d2c447fce8b6703c";
@@ -119,8 +125,8 @@ fn shopify() {
         .secret_key(b"test-secret".to_vec())
         .build();
     let webhook = RocketWebhook::builder().webhook(shopify_webhook).build();
-    let mut rocket = rocket::build().mount("/", routes![shopify_route]);
-    rocket = webhook.register_with(rocket);
+    let rocket = rocket::build().mount("/", routes![shopify_route]);
+    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
 
     let client = Client::tracked(rocket).unwrap();
     let payload = "hello shopify";
@@ -143,7 +149,7 @@ struct StripePayload {
 
 #[get("/stripe", data = "<payload>")]
 async fn stripe_route(
-    payload: WebhookPayload<'_, StripeWebhook, StripePayload>,
+    payload: WebhookPayload<'_, StripePayload, StripeWebhook>,
 ) -> Json<StripePayload> {
     Json(payload.data)
 }
@@ -154,8 +160,8 @@ fn stripe() {
         .secret_key(b"test-secret".to_vec())
         .build();
     let webhook = RocketWebhook::builder().webhook(stripe_webhook).build();
-    let mut rocket = rocket::build().mount("/", routes![stripe_route]);
-    rocket = webhook.register_with(rocket);
+    let rocket = rocket::build().mount("/", routes![stripe_route]);
+    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
 
     let client = Client::tracked(rocket).unwrap();
     let payload = json!({

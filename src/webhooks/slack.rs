@@ -1,4 +1,4 @@
-use bon::bon;
+use bon::Builder;
 use hmac::Hmac;
 use rocket::outcome::try_outcome;
 use sha2::Sha256;
@@ -13,23 +13,26 @@ use super::*;
 /// Signature is a digest of `v0:<timestamp>:<body>`
 ///
 /// [Slack docs](https://docs.slack.dev/authentication/verifying-requests-from-slack/#validating-a-request)
+#[derive(Builder)]
 pub struct SlackWebhook {
+    #[builder(default = "Slack webhook")]
+    name: &'static str,
+    #[builder(with = |secret: Vec<u8>| Zeroizing::new(secret))]
     secret_key: Zeroizing<Vec<u8>>,
 }
 
-#[bon]
 impl SlackWebhook {
-    #[builder]
-    pub fn new(secret_key: Vec<u8>) -> Self {
+    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
         Self {
+            name,
             secret_key: Zeroizing::new(secret_key),
         }
     }
 }
 
 impl Webhook for SlackWebhook {
-    fn name() -> &'static str {
-        "Slack webhook"
+    fn name(&self) -> &'static str {
+        self.name
     }
 
     async fn read_body_and_validate<'r>(
