@@ -12,12 +12,16 @@ use tokio_util::bytes::{Bytes, BytesMut};
 use tokio_util::io::ReaderStream;
 
 mod github;
+mod shopify;
 mod slack;
+mod stripe;
 
 /// Built-in webhook validators
 pub mod built_in {
     pub use super::github::GitHubWebhook;
+    pub use super::shopify::ShopifyWebhook;
     pub use super::slack::SlackWebhook;
+    pub use super::stripe::StripeWebhook;
 }
 
 /// Trait that describes how to read and verify a webhook. You can implement this trait

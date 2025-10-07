@@ -58,6 +58,7 @@ use rocket::{Build, Rocket, async_trait, fairing};
 mod guard;
 pub mod webhooks;
 pub use guard::{WebhookPayload, WebhookPayloadRaw};
+pub use hmac;
 
 use crate::webhooks::Webhook;
 

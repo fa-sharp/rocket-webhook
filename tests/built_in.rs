@@ -7,7 +7,7 @@ use rocket::{
 };
 use rocket_webhook::{
     RocketWebhook, WebhookPayload, WebhookPayloadRaw,
-    webhooks::built_in::{GitHubWebhook, SlackWebhook},
+    webhooks::built_in::{GitHubWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook},
 };
 use serde::{Deserialize, Serialize};
 
@@ -106,4 +106,77 @@ fn slack() {
         .dispatch();
 
     assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[get("/shopify", data = "<payload>")]
+async fn shopify_route(payload: WebhookPayloadRaw<'_, ShopifyWebhook>) -> Vec<u8> {
+    payload.data
+}
+
+#[test]
+fn shopify() {
+    let shopify_webhook = ShopifyWebhook::builder()
+        .secret_key(b"test-secret".to_vec())
+        .build();
+    let webhook = RocketWebhook::builder().webhook(shopify_webhook).build();
+    let mut rocket = rocket::build().mount("/", routes![shopify_route]);
+    rocket = webhook.register_with(rocket);
+
+    let client = Client::tracked(rocket).unwrap();
+    let payload = "hello shopify";
+    let signature = "l9ww1bSzk5iGBGdGlyeaPPokoYvxPHgk0w4reAA+jLc=";
+    let response = client
+        .get("/shopify")
+        .header(Header::new("X-Shopify-Hmac-Sha256", signature))
+        .body(payload)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.into_string(), Some(payload.into()));
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct StripePayload {
+    id: String,
+    object: String,
+}
+
+#[get("/stripe", data = "<payload>")]
+async fn stripe_route(
+    payload: WebhookPayload<'_, StripeWebhook, StripePayload>,
+) -> Json<StripePayload> {
+    Json(payload.data)
+}
+
+#[test]
+fn stripe() {
+    let stripe_webhook = StripeWebhook::builder()
+        .secret_key(b"test-secret".to_vec())
+        .build();
+    let webhook = RocketWebhook::builder().webhook(stripe_webhook).build();
+    let mut rocket = rocket::build().mount("/", routes![stripe_route]);
+    rocket = webhook.register_with(rocket);
+
+    let client = Client::tracked(rocket).unwrap();
+    let payload = json!({
+        "id": "evt_12345",
+        "object": "event"
+    });
+    let timestamp = "1492774577";
+    let signature = "d08311034a9d558256d1ca3700a3a7f9b22f7ec03e52cca53c5632dcea29b8e7";
+    let header = format!("t={timestamp},v1={signature}");
+    let response = client
+        .get("/stripe")
+        .header(Header::new("Stripe-Signature", header))
+        .json(&payload)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(
+        response.into_json(),
+        Some(StripePayload {
+            id: "evt_12345".into(),
+            object: "event".into()
+        })
+    );
 }

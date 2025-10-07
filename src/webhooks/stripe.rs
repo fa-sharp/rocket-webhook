@@ -1,0 +1,72 @@
+use bon::bon;
+use hmac::Hmac;
+use rocket::outcome::try_outcome;
+use sha2::Sha256;
+use zeroize::Zeroizing;
+
+use super::*;
+
+/// # Stripe webhook
+/// Looks for the `Stripe-Signature` header, splits it by `,` and then
+/// reads `t=<timestamp>` and `v1=<hex signature>`. This currently does not support
+/// multiple signatures sent in the request.
+///
+/// Signature should be a digest of `<timestamp>.<body>`
+///
+/// [Stripe docs](https://docs.stripe.com/webhooks?verify=verify-manually#verify-manually)
+pub struct StripeWebhook {
+    secret_key: Zeroizing<Vec<u8>>,
+}
+
+#[bon]
+impl StripeWebhook {
+    #[builder]
+    pub fn new(secret_key: Vec<u8>) -> Self {
+        Self {
+            secret_key: Zeroizing::new(secret_key),
+        }
+    }
+}
+
+const SIG_HEADER: &str = "Stripe-Signature";
+
+impl Webhook for StripeWebhook {
+    type MAC = Hmac<Sha256>;
+
+    fn name() -> &'static str {
+        "Stripe webhook"
+    }
+
+    fn secret_key(&self) -> &[u8] {
+        &self.secret_key
+    }
+
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<Vec<u8>, String> {
+        let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
+        let Some(signature) = header.split(',').find_map(|part| part.strip_prefix("v1=")) else {
+            return Outcome::Error((
+                Status::BadRequest,
+                format!("Did not find signature in header: '{header}'"),
+            ));
+        };
+        match hex::decode(signature) {
+            Ok(bytes) => Outcome::Success(bytes),
+            Err(_) => Outcome::Error((
+                Status::BadRequest,
+                format!("{SIG_HEADER} header was not valid hex: '{signature}'"),
+            )),
+        }
+    }
+
+    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<Option<Vec<u8>>, String> {
+        let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
+        let Some(time) = header.split(',').find_map(|part| part.strip_prefix("t=")) else {
+            return Outcome::Error((
+                Status::BadRequest,
+                format!("Did not find timestamp in header: '{header}'"),
+            ));
+        };
+        let prefix = [time.as_bytes(), b"."].concat();
+        Outcome::Success(Some(prefix))
+    }
+}
