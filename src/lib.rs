@@ -66,8 +66,10 @@ use std::marker::PhantomData;
 use bon::Builder;
 use rocket::{Build, Rocket, async_trait, fairing};
 
+mod error;
 mod guard;
 pub mod webhooks;
+pub use error::WebhookError;
 pub use guard::{WebhookPayload, WebhookPayloadRaw};
 
 use crate::webhooks::Webhook;

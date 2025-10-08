@@ -8,7 +8,7 @@ use rocket::{
     serde::{DeserializeOwned, json::serde_json},
 };
 
-use crate::{RocketWebhook, webhooks::Webhook};
+use crate::{RocketWebhook, WebhookError, webhooks::Webhook};
 
 /**
  Data guard to validate and deserialize the JSON body of webhook type `W` into the `T` type.
@@ -51,7 +51,7 @@ where
     W: Webhook + Send + Sync + 'static,
     D: Send + Sync + 'static,
 {
-    type Error = String;
+    type Error = WebhookError;
 
     async fn from_data(
         req: &'r Request<'_>,
@@ -68,7 +68,7 @@ where
                 _marker: PhantomData,
                 _discriminator: PhantomData,
             }),
-            Err(e) => Outcome::Error((Status::BadRequest, format!("Deserialize error: {e}"))),
+            Err(e) => Outcome::Error((Status::BadRequest, WebhookError::Deserialize(e))),
         }
     }
 }
@@ -108,7 +108,7 @@ where
     W: Webhook + Send + Sync + 'static,
     D: Send + Sync + 'static,
 {
-    type Error = String;
+    type Error = WebhookError;
 
     async fn from_data(
         req: &'r Request<'_>,
@@ -129,7 +129,7 @@ where
 
 fn get_webhook_from_state<'r, W, D>(
     req: &'r Request,
-) -> Outcome<'r, &'r RocketWebhook<W, D>, String>
+) -> Outcome<'r, &'r RocketWebhook<W, D>, WebhookError>
 where
     W: Webhook + Send + Sync + 'static,
     D: Send + Sync + 'static,
@@ -137,10 +137,7 @@ where
     match req.rocket().state::<RocketWebhook<W, D>>() {
         Some(config) => Outcome::Success(config),
         None => {
-            return Outcome::Error((
-                Status::InternalServerError,
-                "webhook of this type is not attached to Rocket".into(),
-            ));
+            return Outcome::Error((Status::InternalServerError, WebhookError::NotAttached));
         }
     }
 }

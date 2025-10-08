@@ -4,7 +4,10 @@ use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::webhooks::{Webhook, interface::hmac::WebhookHmac};
+use crate::{
+    WebhookError,
+    webhooks::{Webhook, interface::hmac::WebhookHmac},
+};
 
 /// # Slack webhook
 /// Looks for hex signature in `X-Slack-Signature` header, with a 'v0=' prefix,
@@ -30,7 +33,7 @@ impl Webhook for SlackWebhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> Outcome<'_, Vec<u8>, String> {
+    ) -> Outcome<'_, Vec<u8>, WebhookError> {
         let raw_body = try_outcome!(self.read_and_verify_with_hmac(req, body).await);
         Outcome::Success(raw_body)
     }
@@ -43,18 +46,20 @@ impl WebhookHmac for SlackWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String> {
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
         let sig_header = try_outcome!(self.get_header(req, "X-Slack-Signature", Some("v0=")));
         match hex::decode(sig_header) {
             Ok(bytes) => Outcome::Success(bytes),
             Err(_) => Outcome::Error((
                 Status::BadRequest,
-                format!("X-Slack-Signature header was not valid hex: '{sig_header}'"),
+                WebhookError::InvalidHeader(format!(
+                    "X-Slack-Signature header was not valid hex: '{sig_header}'"
+                )),
             )),
         }
     }
 
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, String> {
+    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
         let timestamp = try_outcome!(self.get_header(req, "X-Slack-Request-Timestamp", None));
         let prefix = [b"v0:", timestamp.as_bytes(), b":"].concat();
         Outcome::Success(Some(prefix))

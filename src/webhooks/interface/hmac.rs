@@ -7,7 +7,10 @@ use rocket::{
 };
 use tokio_util::io::ReaderStream;
 
-use crate::webhooks::{Webhook, interface::body_size};
+use crate::{
+    WebhookError,
+    webhooks::{Webhook, interface::body_size},
+};
 
 /// Trait for webhooks that use HMAC signature validation.
 pub trait WebhookHmac: Webhook {
@@ -19,11 +22,11 @@ pub trait WebhookHmac: Webhook {
 
     /// Get the expected signature from the request. To obtain required headers,
     /// you can use the `self.get_header()` utility.
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String>;
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError>;
 
     /// An optional prefix to attach to the raw body when calculating the signature
     #[allow(unused_variables)]
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, String> {
+    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
         Outcome::Success(None)
     }
 
@@ -34,7 +37,7 @@ pub trait WebhookHmac: Webhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> impl Future<Output = Outcome<'_, Vec<u8>, String>> + Send + Sync
+    ) -> impl Future<Output = Outcome<'_, Vec<u8>, WebhookError>> + Send + Sync
     where
         Self: Sync,
         Self::MAC: Sync,
@@ -63,17 +66,17 @@ pub trait WebhookHmac: Webhook {
                         raw_body.extend(chunk_bytes);
                     }
                     Err(e) => {
-                        return Outcome::Error((
-                            Status::BadRequest,
-                            format!("Body read error: {e}"),
-                        ));
+                        return Outcome::Error((Status::BadRequest, WebhookError::ReadError(e)));
                     }
                 }
             }
 
             // Verify signature
             if let Err(e) = mac.verify_slice(&expected_signature) {
-                return Outcome::Error((Status::Unauthorized, format!("Invalid signature: {e}")));
+                return Outcome::Error((
+                    Status::Unauthorized,
+                    WebhookError::InvalidSignature(e.to_string()),
+                ));
             }
 
             Outcome::Success(raw_body)

@@ -5,7 +5,10 @@ use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::webhooks::{Webhook, interface::hmac::WebhookHmac};
+use crate::{
+    WebhookError,
+    webhooks::{Webhook, interface::hmac::WebhookHmac},
+};
 
 /// # Shopify webhook
 /// Looks for base64 signature in `X-Shopify-Hmac-Sha256` header
@@ -28,7 +31,7 @@ impl Webhook for ShopifyWebhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> Outcome<'_, Vec<u8>, String> {
+    ) -> Outcome<'_, Vec<u8>, WebhookError> {
         let raw_body = try_outcome!(self.read_and_verify_with_hmac(req, body).await);
         Outcome::Success(raw_body)
     }
@@ -41,13 +44,15 @@ impl WebhookHmac for ShopifyWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String> {
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
         let sig_header = try_outcome!(self.get_header(req, "X-Shopify-Hmac-Sha256", None));
         match BASE64_STANDARD.decode(sig_header) {
             Ok(bytes) => Outcome::Success(bytes),
             Err(_) => Outcome::Error((
                 Status::BadRequest,
-                format!("X-Shopify-Hmac-Sha256 header was not valid base64: '{sig_header}'"),
+                WebhookError::InvalidHeader(format!(
+                    "X-Shopify-Hmac-Sha256 header was not valid base64: '{sig_header}'"
+                )),
             )),
         }
     }

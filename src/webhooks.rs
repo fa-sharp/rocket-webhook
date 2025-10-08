@@ -2,6 +2,8 @@
 
 use rocket::{Request, data::Outcome, http::Status, tokio::io::AsyncRead};
 
+use crate::WebhookError;
+
 pub mod built_in;
 pub mod interface;
 
@@ -15,7 +17,7 @@ pub trait Webhook {
         &self,
         req: &'r Request<'_>,
         body_reader: impl AsyncRead + Unpin + Send + Sync,
-    ) -> impl Future<Output = Outcome<'_, Vec<u8>, String>> + Send + Sync;
+    ) -> impl Future<Output = Outcome<'_, Vec<u8>, WebhookError>> + Send + Sync;
 
     /// Retrieve a header that's expected for a webhook request. The default
     /// implementation looks for the header and returns a Bad Request error if it was not provided.
@@ -25,7 +27,7 @@ pub trait Webhook {
         req: &'r Request<'_>,
         name: &str,
         prefix: Option<&str>,
-    ) -> Outcome<'_, &'r str, String> {
+    ) -> Outcome<'_, &'r str, WebhookError> {
         match req.headers().get_one(name) {
             Some(value) => match prefix {
                 None => Outcome::Success(value),
@@ -33,11 +35,13 @@ pub trait Webhook {
                     Some(stripped) => Outcome::Success(stripped),
                     None => Outcome::Error((
                         Status::BadRequest,
-                        format!("Header '{name}' doesn't have required prefix: got '{value}'"),
+                        WebhookError::InvalidHeader(format!(
+                            "'{name}' is missing prefix '{prefix}': {value}"
+                        )),
                     )),
                 },
             },
-            None => Outcome::Error((Status::BadRequest, format!("Missing header '{name}'"))),
+            None => Outcome::Error((Status::BadRequest, WebhookError::MissingHeader(name.into()))),
         }
     }
 }

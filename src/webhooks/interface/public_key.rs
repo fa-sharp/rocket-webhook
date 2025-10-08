@@ -9,7 +9,10 @@ use rocket::{
 };
 use tokio_util::bytes::Bytes;
 
-use crate::webhooks::{Webhook, interface::body_size};
+use crate::{
+    WebhookError,
+    webhooks::{Webhook, interface::body_size},
+};
 
 /// Public key algorithms
 pub mod algorithms;
@@ -32,10 +35,10 @@ pub trait WebhookPublicKey: Webhook {
     fn public_key<'r>(
         &self,
         req: &'r Request<'_>,
-    ) -> impl Future<Output = Outcome<'_, Bytes, String>> + Send + Sync;
+    ) -> impl Future<Output = Outcome<'_, Bytes, WebhookError>> + Send + Sync;
 
     /// Get the expected signature from the request
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String>;
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError>;
 
     /// Get the message that needs to be verified. Any adjustments can be made to the body here
     /// before calculating the signature (e.g. prefixes or hashes or other random things that the
@@ -47,7 +50,7 @@ pub trait WebhookPublicKey: Webhook {
         &self,
         req: &'r Request<'_>,
         body: &Bytes,
-    ) -> Outcome<'_, Bytes, String> {
+    ) -> Outcome<'_, Bytes, WebhookError> {
         Outcome::Success(body.clone())
     }
 
@@ -56,7 +59,7 @@ pub trait WebhookPublicKey: Webhook {
         &self,
         req: &'r Request<'_>,
         mut body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> impl Future<Output = Outcome<'_, Vec<u8>, String>> + Send + Sync
+    ) -> impl Future<Output = Outcome<'_, Vec<u8>, WebhookError>> + Send + Sync
     where
         Self: Sync,
     {
@@ -70,14 +73,14 @@ pub trait WebhookPublicKey: Webhook {
             // Read body stream
             let mut raw_body = Vec::with_capacity(body_size(req.headers()).unwrap_or(512));
             if let Err(e) = body.read_to_end(&mut raw_body).await {
-                return Outcome::Error((Status::BadRequest, format!("Body read error: {e}")));
+                return Outcome::Error((Status::BadRequest, WebhookError::ReadError(e)));
             }
             let raw_body = Bytes::from(raw_body);
 
             // Verify signature with public key
             let message = try_outcome!(self.message_to_verify(req, &raw_body));
             if let Err(e) = Self::ALG::verify(&public_key, &message, &expected_signature) {
-                return Outcome::Error((Status::Unauthorized, format!("Invalid signature: {e}")));
+                return Outcome::Error((Status::Unauthorized, WebhookError::InvalidSignature(e)));
             }
 
             Outcome::Success(raw_body.into())

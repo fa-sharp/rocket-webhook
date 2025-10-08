@@ -4,7 +4,10 @@ use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::webhooks::{Webhook, interface::hmac::WebhookHmac};
+use crate::{
+    WebhookError,
+    webhooks::{Webhook, interface::hmac::WebhookHmac},
+};
 
 /// # Stripe webhook
 /// Looks for the `Stripe-Signature` header, splits it by `,` and then
@@ -33,7 +36,7 @@ impl Webhook for StripeWebhook {
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
-    ) -> Outcome<'_, Vec<u8>, String> {
+    ) -> Outcome<'_, Vec<u8>, WebhookError> {
         let raw_body = try_outcome!(self.read_and_verify_with_hmac(req, body).await);
         Outcome::Success(raw_body)
     }
@@ -46,29 +49,35 @@ impl WebhookHmac for StripeWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, String> {
+    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
         let Some(signature) = header.split(',').find_map(|part| part.strip_prefix("v1=")) else {
             return Outcome::Error((
                 Status::BadRequest,
-                format!("Did not find signature in header: '{header}'"),
+                WebhookError::InvalidHeader(format!(
+                    "Did not find signature in header: '{header}'"
+                )),
             ));
         };
         match hex::decode(signature) {
             Ok(bytes) => Outcome::Success(bytes),
             Err(_) => Outcome::Error((
                 Status::BadRequest,
-                format!("{SIG_HEADER} header was not valid hex: '{signature}'"),
+                WebhookError::InvalidHeader(format!(
+                    "{SIG_HEADER} header was not valid hex: '{signature}'"
+                )),
             )),
         }
     }
 
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, String> {
+    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
         let Some(time) = header.split(',').find_map(|part| part.strip_prefix("t=")) else {
             return Outcome::Error((
                 Status::BadRequest,
-                format!("Did not find timestamp in header: '{header}'"),
+                WebhookError::InvalidHeader(format!(
+                    "Did not find timestamp in header: '{header}'"
+                )),
             ));
         };
         let prefix = [time.as_bytes(), b"."].concat();

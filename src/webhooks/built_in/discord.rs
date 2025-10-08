@@ -3,9 +3,12 @@ use hex::FromHexError;
 use rocket::{data::Outcome, http::Status, outcome::try_outcome};
 use tokio_util::bytes::{BufMut, Bytes, BytesMut};
 
-use crate::webhooks::{
-    Webhook,
-    interface::public_key::{WebhookPublicKey, algorithms::ed25519::Ed25519},
+use crate::{
+    WebhookError,
+    webhooks::{
+        Webhook,
+        interface::public_key::{WebhookPublicKey, algorithms::ed25519::Ed25519},
+    },
 };
 
 /// # Discord Interactions webhook
@@ -41,7 +44,7 @@ impl Webhook for DiscordWebhook {
         &self,
         req: &'r rocket::Request<'_>,
         body_reader: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
-    ) -> Outcome<'_, Vec<u8>, String> {
+    ) -> Outcome<'_, Vec<u8>, WebhookError> {
         let raw_body = try_outcome!(self.read_and_verify_with_public_key(req, body_reader).await);
         Outcome::Success(raw_body)
     }
@@ -50,17 +53,25 @@ impl Webhook for DiscordWebhook {
 impl WebhookPublicKey for DiscordWebhook {
     type ALG = Ed25519;
 
-    async fn public_key<'r>(&self, _req: &'r rocket::Request<'_>) -> Outcome<'_, Bytes, String> {
+    async fn public_key<'r>(
+        &self,
+        _req: &'r rocket::Request<'_>,
+    ) -> Outcome<'_, Bytes, WebhookError> {
         Outcome::Success(self.public_key.clone())
     }
 
-    fn expected_signature<'r>(&self, req: &'r rocket::Request<'_>) -> Outcome<'_, Vec<u8>, String> {
+    fn expected_signature<'r>(
+        &self,
+        req: &'r rocket::Request<'_>,
+    ) -> Outcome<'_, Vec<u8>, WebhookError> {
         let sig_header = try_outcome!(self.get_header(req, "X-Signature-Ed25519", None));
         match hex::decode(sig_header) {
             Ok(bytes) => Outcome::Success(bytes),
             Err(_) => Outcome::Error((
                 Status::BadRequest,
-                format!("X-Signature-Ed25519 header was not valid hex: '{sig_header}'"),
+                WebhookError::InvalidHeader(format!(
+                    "X-Signature-Ed25519 header was not valid hex: '{sig_header}'"
+                )),
             )),
         }
     }
@@ -69,7 +80,7 @@ impl WebhookPublicKey for DiscordWebhook {
         &self,
         req: &'r rocket::Request<'_>,
         body: &Bytes,
-    ) -> Outcome<'_, Bytes, String> {
+    ) -> Outcome<'_, Bytes, WebhookError> {
         let timestamp = try_outcome!(self.get_header(req, "X-Signature-Timestamp", None));
         let mut timestamp_and_body = BytesMut::with_capacity(timestamp.len() + body.len());
         timestamp_and_body.put(timestamp.as_bytes());
