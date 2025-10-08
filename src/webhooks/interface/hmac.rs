@@ -5,6 +5,7 @@ use rocket::{
     Request, data::Outcome, futures::StreamExt, http::Status, outcome::try_outcome,
     tokio::io::AsyncRead,
 };
+use subtle::ConstantTimeEq;
 use tokio_util::io::ReaderStream;
 
 use crate::{
@@ -20,9 +21,12 @@ pub trait WebhookHmac: Webhook {
     /// Get the secret key used to sign the webhook
     fn secret_key(&self) -> &[u8];
 
-    /// Get the expected signature from the request. To obtain required headers,
+    /// Get the expected signature(s) from the request. To obtain required headers,
     /// you can use the `self.get_header()` utility.
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError>;
+    fn expected_signatures<'r>(
+        &self,
+        req: &'r Request<'_>,
+    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError>;
 
     /// An optional prefix to attach to the raw body when calculating the signature
     #[allow(unused_variables)]
@@ -43,8 +47,8 @@ pub trait WebhookHmac: Webhook {
         Self::MAC: Sync,
     {
         async {
-            // Get expected signature from request
-            let expected_signature = try_outcome!(self.expected_signature(req));
+            // Get expected signatures from request
+            let expected_signatures = try_outcome!(self.expected_signatures(req));
 
             // Get secret key and initialize HMAC
             let key = self.secret_key();
@@ -71,15 +75,17 @@ pub trait WebhookHmac: Webhook {
                 }
             }
 
-            // Verify signature
-            if let Err(e) = mac.verify_slice(&expected_signature) {
-                return Outcome::Error((
-                    Status::Unauthorized,
-                    WebhookError::InvalidSignature(e.to_string()),
-                ));
+            // Check HMAC against all provided signatures
+            let body_sig = mac.finalize().into_bytes();
+            for signature in expected_signatures {
+                if body_sig.ct_eq(&signature).into() {
+                    return Outcome::Success(raw_body);
+                }
             }
-
-            Outcome::Success(raw_body)
+            return Outcome::Error((
+                Status::Unauthorized,
+                WebhookError::InvalidSignature("HMAC didn't match any provided signature".into()),
+            ));
         }
     }
 }

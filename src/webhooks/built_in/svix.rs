@@ -69,30 +69,28 @@ impl WebhookHmac for SvixWebhook {
     }
 
     /// Multiple space delimited signatures in header, prefixed by `v1,`
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
+    fn expected_signatures<'r>(
+        &self,
+        req: &'r Request<'_>,
+    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
         const SIG_HEADER: &str = "svix-signature";
 
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
-        let Some(sig_base64) = header
-            .split(' ')
-            .find_map(|part| part.split_once(',').map(|p| p.1))
-        else {
-            return Outcome::Error((
-                Status::BadRequest,
-                WebhookError::InvalidHeader(format!(
-                    "Did not find signature in {SIG_HEADER} header: '{header}'"
-                )),
-            ));
-        };
-
-        match BASE64_STANDARD.decode(sig_base64) {
-            Ok(bytes) => Outcome::Success(bytes),
-            Err(_) => Outcome::Error((
-                Status::BadRequest,
-                WebhookError::InvalidHeader(format!(
-                    "{SIG_HEADER} header was not valid base64: '{sig_base64}'"
-                )),
-            )),
+        let mut signatures = Vec::new();
+        for base64_sig in header.split(' ').filter_map(|s| s.strip_prefix("v1,")) {
+            match BASE64_STANDARD.decode(base64_sig) {
+                Ok(bytes) => signatures.push(bytes),
+                Err(_) => {
+                    return Outcome::Error((
+                        Status::BadRequest,
+                        WebhookError::InvalidHeader(format!(
+                            "Signature in {SIG_HEADER} header was not valid base64: '{base64_sig}'"
+                        )),
+                    ));
+                }
+            }
         }
+
+        Outcome::Success(signatures)
     }
 }

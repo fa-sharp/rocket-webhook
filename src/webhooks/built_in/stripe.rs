@@ -11,8 +11,7 @@ use crate::{
 
 /// # Stripe webhook
 /// Looks for the `Stripe-Signature` header, splits it by `,` and then
-/// reads `t=<timestamp>` and `v1=<hex signature>`. This currently does not support
-/// multiple signatures sent in the request.
+/// reads `t=<timestamp>` and `v1=<hex signature>` (multiple signatures supported).
 ///
 /// Signature should be a digest of `<timestamp>.<body>`
 ///
@@ -49,25 +48,27 @@ impl WebhookHmac for StripeWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
+    fn expected_signatures<'r>(
+        &self,
+        req: &'r Request<'_>,
+    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
-        let Some(signature) = header.split(',').find_map(|part| part.strip_prefix("v1=")) else {
-            return Outcome::Error((
-                Status::BadRequest,
-                WebhookError::InvalidHeader(format!(
-                    "Did not find signature in header: '{header}'"
-                )),
-            ));
-        };
-        match hex::decode(signature) {
-            Ok(bytes) => Outcome::Success(bytes),
-            Err(_) => Outcome::Error((
-                Status::BadRequest,
-                WebhookError::InvalidHeader(format!(
-                    "{SIG_HEADER} header was not valid hex: '{signature}'"
-                )),
-            )),
+        let mut signatures = Vec::new();
+        for hex_sig in header.split(',').filter_map(|s| s.strip_prefix("v1=")) {
+            match hex::decode(hex_sig) {
+                Ok(bytes) => signatures.push(bytes),
+                Err(_) => {
+                    return Outcome::Error((
+                        Status::BadRequest,
+                        WebhookError::InvalidHeader(format!(
+                            "Signature in {SIG_HEADER} header was not valid hex: '{hex_sig}'"
+                        )),
+                    ));
+                }
+            };
         }
+
+        Outcome::Success(signatures)
     }
 
     fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {

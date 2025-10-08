@@ -167,8 +167,9 @@ fn stripe() {
         "object": "event"
     });
     let timestamp = "1492774577";
-    let signature = "d08311034a9d558256d1ca3700a3a7f9b22f7ec03e52cca53c5632dcea29b8e7";
-    let header = format!("t={timestamp},v1={signature}");
+    let signature_1 = "d08311034a9d558256d1ca3700a3a7f9b22f7ec03e52cca53c5632dcea29b8d7";
+    let signature_2 = "d08311034a9d558256d1ca3700a3a7f9b22f7ec03e52cca53c5632dcea29b8e7";
+    let header = format!("t={timestamp},v1={signature_1},v1={signature_2}");
     let response = client
         .get("/stripe")
         .header(Header::new("Stripe-Signature", header))
@@ -280,7 +281,7 @@ fn svix() {
     let payload = json!({ "event_type":"ping", "success":true});
     let id = "msg_CGEWVFV0jBkqRIfP";
     let timestamp = "1759933695";
-    let signature = "v1,waXhsxOg6d11zKvCs7dg/PxN9dXETpdbalU1o3J66K4=";
+    let signature = "v1,vaXhsxOg6d11zKvCs7dg/PxN9dXETpdbalU1o3J66K4= v1,waXhsxOg6d11zKvCs7dg/PxN9dXETpdbalU1o3J66K4=";
     let response = client
         .post("/svix")
         .header(Header::new("Svix-Id", id))

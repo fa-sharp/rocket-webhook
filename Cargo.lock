@@ -1246,6 +1246,7 @@ dependencies = [
  "rocket",
  "serde",
  "sha2",
+ "subtle",
  "tokio-util",
  "zeroize",
 ]

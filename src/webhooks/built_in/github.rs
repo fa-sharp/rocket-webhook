@@ -43,10 +43,13 @@ impl WebhookHmac for GitHubWebhook {
         &self.secret_key
     }
 
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
+    fn expected_signatures<'r>(
+        &self,
+        req: &'r Request<'_>,
+    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
         let sig_header = try_outcome!(self.get_header(req, "X-Hub-Signature-256", Some("sha256=")));
         match hex::decode(sig_header) {
-            Ok(bytes) => Outcome::Success(bytes),
+            Ok(bytes) => Outcome::Success(vec![bytes]),
             Err(_) => Outcome::Error((
                 Status::BadRequest,
                 WebhookError::InvalidHeader(format!(
