@@ -120,7 +120,7 @@ async fn shopify_route(payload: WebhookPayloadRaw<'_, ShopifyWebhook>) -> Vec<u8
 
 #[test]
 fn shopify() {
-    let shopify_webhook = ShopifyWebhook::builder().secret_key(b"test-secret").build();
+    let shopify_webhook = ShopifyWebhook::builder().secret_key("test-secret").build();
     let webhook = RocketWebhook::builder().webhook(shopify_webhook).build();
     let rocket = rocket::build().mount("/", routes![shopify_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
@@ -153,7 +153,7 @@ async fn stripe_route(
 
 #[test]
 fn stripe() {
-    let stripe_webhook = StripeWebhook::builder().secret_key(b"test-secret").build();
+    let stripe_webhook = StripeWebhook::builder().secret_key("test-secret").build();
     let webhook = RocketWebhook::builder().webhook(stripe_webhook).build();
     let rocket = rocket::build().mount("/", routes![stripe_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
@@ -189,9 +189,11 @@ async fn discord_route(payload: WebhookPayloadRaw<'_, DiscordWebhook>) -> Vec<u8
 
 #[test]
 fn discord() {
-    let public_key =
-        hex::decode("25B573092C76A64F7588FDDF76CD7C53774099C163A53A039D314C0EBD323C92").unwrap();
-    let discord_webhook = DiscordWebhook::builder().public_key(public_key).build();
+    let public_key = "25B573092C76A64F7588FDDF76CD7C53774099C163A53A039D314C0EBD323C92";
+    let discord_webhook = DiscordWebhook::builder()
+        .public_key(public_key)
+        .build()
+        .expect("should be valid hex");
     let webhook = RocketWebhook::builder().webhook(discord_webhook).build();
     let rocket = rocket::build().mount("/", routes![discord_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
@@ -219,8 +221,11 @@ fn sendgrid_route(payload: WebhookPayloadRaw<'_, SendGridWebhook>) -> Vec<u8> {
 #[test]
 fn sendgrid() {
     let public_key =
-        hex::decode("04fd889cdaace0fc1a2904d52cda9e6d5698f8a02968117acb66d086d14b69d52904c2ce824604c0b5cc2f94e4184f341072721f7b8d7762b6a5d45a41b16a144d").unwrap();
-    let sendgrid_webhook = SendGridWebhook::builder().public_key(public_key).build();
+        "BP2InNqs4PwaKQTVLNqebVaY+KApaBF6y2bQhtFLadUpBMLOgkYEwLXML5TkGE80EHJyH3uNd2K2pdRaQbFqFE0=";
+    let sendgrid_webhook = SendGridWebhook::builder()
+        .public_key(public_key)
+        .build()
+        .expect("should be valid base64");
     let webhook = RocketWebhook::builder().webhook(sendgrid_webhook).build();
     let rocket = rocket::build().mount("/", routes![sendgrid_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();

@@ -1,10 +1,11 @@
-use bon::Builder;
+use bon::bon;
+use hex::FromHexError;
 use rocket::{data::Outcome, http::Status, outcome::try_outcome};
 use tokio_util::bytes::{BufMut, Bytes, BytesMut};
 
 use crate::webhooks::{
     Webhook,
-    interface::public_key::{Ed25519, WebhookPublicKey},
+    interface::public_key::{WebhookPublicKey, algorithms::ed25519::Ed25519},
 };
 
 /// # Discord Interactions webhook
@@ -13,12 +14,22 @@ use crate::webhooks::{
 /// Signature should be hex Ed25519 signature of `{timestamp}{body}`
 ///
 /// [Discord docs](https://discord.com/developers/docs/interactions/overview#setting-up-an-endpoint-validating-security-request-headers)
-#[derive(Builder)]
 pub struct DiscordWebhook {
-    #[builder(default = "Discord webhook")]
     name: &'static str,
-    #[builder(with = |public_key: impl Into<Vec<u8>>| Bytes::from(public_key.into()))]
     public_key: Bytes,
+}
+
+#[bon]
+impl DiscordWebhook {
+    #[builder]
+    pub fn new(
+        #[builder(default = "Discord webhook")] name: &'static str,
+        /// The hex public key from Discord
+        public_key: impl AsRef<str>,
+    ) -> Result<Self, FromHexError> {
+        let public_key = Bytes::from(hex::decode(public_key.as_ref())?);
+        Ok(Self { name, public_key })
+    }
 }
 
 impl Webhook for DiscordWebhook {

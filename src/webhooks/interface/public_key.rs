@@ -1,6 +1,5 @@
 //! Interface for webhooks that use asymmetric keys for signatures
 
-use ring::signature::{ECDSA_P256_SHA256_ASN1, ED25519, UnparsedPublicKey};
 use rocket::{
     Request,
     data::Outcome,
@@ -11,6 +10,14 @@ use rocket::{
 use tokio_util::bytes::Bytes;
 
 use crate::webhooks::{Webhook, interface::body_size};
+
+/// Public key algorithms
+pub mod algorithms;
+
+/// Trait for algorithms to use for assymetric key verification
+pub trait WebhookPublicKeyAlgorithm {
+    fn verify(public_key: &Bytes, message: &[u8], signature: &[u8]) -> Result<(), String>;
+}
 
 /// Trait for webhooks that use asymmetric keys for signatures
 pub trait WebhookPublicKey: Webhook {
@@ -75,28 +82,5 @@ pub trait WebhookPublicKey: Webhook {
 
             Outcome::Success(raw_body.into())
         }
-    }
-}
-
-/// Trait for algorithms to use for assymetric key verification
-pub trait WebhookPublicKeyAlgorithm {
-    fn verify(public_key: &Bytes, message: &[u8], signature: &[u8]) -> Result<(), String>;
-}
-
-pub struct Ed25519;
-impl WebhookPublicKeyAlgorithm for Ed25519 {
-    fn verify(public_key: &Bytes, message: &[u8], signature: &[u8]) -> Result<(), String> {
-        let key = UnparsedPublicKey::new(&ED25519, public_key);
-        key.verify(message, signature)
-            .map_err(|e| format!("Ed25519 verification failed: {e}"))
-    }
-}
-
-pub struct EcdsaP256Asn1;
-impl WebhookPublicKeyAlgorithm for EcdsaP256Asn1 {
-    fn verify(public_key: &Bytes, message: &[u8], signature: &[u8]) -> Result<(), String> {
-        let key = UnparsedPublicKey::new(&ECDSA_P256_SHA256_ASN1, public_key);
-        key.verify(message, signature)
-            .map_err(|e| format!("ECDSA P-256 verification failed: {e}"))
     }
 }

@@ -1,11 +1,11 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use bon::Builder;
+use bon::bon;
 use rocket::{data::Outcome, http::Status, outcome::try_outcome};
 use tokio_util::bytes::{BufMut, Bytes, BytesMut};
 
 use crate::webhooks::{
     Webhook,
-    interface::public_key::{EcdsaP256Asn1, WebhookPublicKey},
+    interface::public_key::{WebhookPublicKey, algorithms::p256::EcdsaP256Asn1},
 };
 
 /// # Sendgrid webhook
@@ -14,12 +14,23 @@ use crate::webhooks::{
 /// Signature header should be base64 ECDSA P256 ASN1 signature of `{timestamp}{body}`
 ///
 /// [SendGrid docs](https://www.twilio.com/docs/sendgrid/for-developers/tracking-events/getting-started-event-webhook-security-features#verify-the-signature)
-#[derive(Builder)]
 pub struct SendGridWebhook {
-    #[builder(default = "SendGrid webhook")]
     name: &'static str,
-    #[builder(with = |public_key: impl Into<Vec<u8>>| Bytes::from(public_key.into()))]
+    /// The base64 public key from SendGrid
     public_key: Bytes,
+}
+
+#[bon]
+impl SendGridWebhook {
+    #[builder]
+    pub fn new(
+        #[builder(default = "SendGrid webhook")] name: &'static str,
+        /// The hex public key from Discord
+        public_key: impl AsRef<str>,
+    ) -> Result<Self, base64::DecodeError> {
+        let public_key = Bytes::from(BASE64_STANDARD.decode(public_key.as_ref())?);
+        Ok(Self { name, public_key })
+    }
 }
 
 impl Webhook for SendGridWebhook {
