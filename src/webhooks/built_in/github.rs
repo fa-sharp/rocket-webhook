@@ -4,7 +4,7 @@ use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::webhooks::{Webhook, interface::WebhookHmac};
+use crate::webhooks::{Webhook, interface::hmac::WebhookHmac};
 
 /// # GitHub webhook
 /// Looks for hex signature in `X-Hub-Signature-256` header, with a 'sha256=' prefix
@@ -16,15 +16,6 @@ pub struct GitHubWebhook {
     name: &'static str,
     #[builder(with = |secret: impl Into<Vec<u8>>| Zeroizing::new(secret.into()))]
     secret_key: Zeroizing<Vec<u8>>,
-}
-
-impl GitHubWebhook {
-    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
-        Self {
-            name,
-            secret_key: Zeroizing::new(secret_key),
-        }
-    }
 }
 
 impl Webhook for GitHubWebhook {

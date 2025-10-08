@@ -10,6 +10,11 @@ mod github;
 #[cfg(feature = "github")]
 pub use github::GitHubWebhook;
 
+#[cfg(feature = "sendgrid")]
+mod sendgrid;
+#[cfg(feature = "sendgrid")]
+pub use sendgrid::SendGridWebhook;
+
 #[cfg(feature = "shopify")]
 mod shopify;
 #[cfg(feature = "shopify")]

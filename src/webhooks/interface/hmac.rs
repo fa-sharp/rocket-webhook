@@ -1,3 +1,5 @@
+//! Interface for webhooks that use HMAC signature validation
+
 use hmac::{Mac, digest::KeyInit};
 use rocket::{
     Request, data::Outcome, futures::StreamExt, http::Status, outcome::try_outcome,

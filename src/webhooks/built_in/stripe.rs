@@ -4,7 +4,7 @@ use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::webhooks::{Webhook, interface::WebhookHmac};
+use crate::webhooks::{Webhook, interface::hmac::WebhookHmac};
 
 /// # Stripe webhook
 /// Looks for the `Stripe-Signature` header, splits it by `,` and then
@@ -20,15 +20,6 @@ pub struct StripeWebhook {
     name: &'static str,
     #[builder(with = |secret: impl Into<Vec<u8>>| Zeroizing::new(secret.into()))]
     secret_key: Zeroizing<Vec<u8>>,
-}
-
-impl StripeWebhook {
-    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
-        Self {
-            name,
-            secret_key: Zeroizing::new(secret_key),
-        }
-    }
 }
 
 const SIG_HEADER: &str = "Stripe-Signature";

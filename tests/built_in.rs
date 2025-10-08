@@ -8,7 +8,7 @@ use rocket::{
 use rocket_webhook::{
     RocketWebhook, RocketWebhookRegister, WebhookPayload, WebhookPayloadRaw,
     webhooks::built_in::{
-        DiscordWebhook, GitHubWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook,
+        DiscordWebhook, GitHubWebhook, SendGridWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -28,10 +28,7 @@ async fn github_route(
 #[test]
 fn github() {
     let github_webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::new(
-            "GitHub webhook",
-            b"test-secret".to_vec(),
-        ))
+        .webhook(GitHubWebhook::builder().secret_key(b"test-secret").build())
         .build();
 
     let rocket = rocket::build().mount("/", routes![github_route]);
@@ -74,7 +71,7 @@ async fn slack_route(payload: WebhookPayloadRaw<'_, SlackWebhook>) -> Vec<u8> {
 #[test]
 fn slack() {
     let slack_webhook = SlackWebhook::builder()
-        .secret_key(b"8f742231b10e8888abcd99yyyzzz85a5".to_vec())
+        .secret_key(b"8f742231b10e8888abcd99yyyzzz85a5")
         .build();
     let webhook = RocketWebhook::builder().webhook(slack_webhook).build();
     let rocket = RocketWebhookRegister::new(rocket::build())
@@ -123,9 +120,7 @@ async fn shopify_route(payload: WebhookPayloadRaw<'_, ShopifyWebhook>) -> Vec<u8
 
 #[test]
 fn shopify() {
-    let shopify_webhook = ShopifyWebhook::builder()
-        .secret_key(b"test-secret".to_vec())
-        .build();
+    let shopify_webhook = ShopifyWebhook::builder().secret_key(b"test-secret").build();
     let webhook = RocketWebhook::builder().webhook(shopify_webhook).build();
     let rocket = rocket::build().mount("/", routes![shopify_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
@@ -158,9 +153,7 @@ async fn stripe_route(
 
 #[test]
 fn stripe() {
-    let stripe_webhook = StripeWebhook::builder()
-        .secret_key(b"test-secret".to_vec())
-        .build();
+    let stripe_webhook = StripeWebhook::builder().secret_key(b"test-secret").build();
     let webhook = RocketWebhook::builder().webhook(stripe_webhook).build();
     let rocket = rocket::build().mount("/", routes![stripe_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
@@ -211,6 +204,41 @@ fn discord() {
         .get("/discord")
         .header(Header::new("X-Signature-Ed25519", signature))
         .header(Header::new("X-Signature-Timestamp", timestamp))
+        .body(payload)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.into_string(), Some(payload.into()));
+}
+
+#[get("/sendgrid", data = "<payload>")]
+fn sendgrid_route(payload: WebhookPayloadRaw<'_, SendGridWebhook>) -> Vec<u8> {
+    payload.data
+}
+
+#[test]
+fn sendgrid() {
+    let public_key =
+        hex::decode("04fd889cdaace0fc1a2904d52cda9e6d5698f8a02968117acb66d086d14b69d52904c2ce824604c0b5cc2f94e4184f341072721f7b8d7762b6a5d45a41b16a144d").unwrap();
+    let sendgrid_webhook = SendGridWebhook::builder().public_key(public_key).build();
+    let webhook = RocketWebhook::builder().webhook(sendgrid_webhook).build();
+    let rocket = rocket::build().mount("/", routes![sendgrid_route]);
+    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
+
+    let client = Client::tracked(rocket).unwrap();
+    let payload = "hello sendgrid";
+    let timestamp = "1759897407";
+    let signature = "MEQCIC+OAVQZEB8+qlkIM2BbPvSKbpRQZwJe/4emHZoNRKsIAiAtxFtWiNzpMhYkrFROz72r6xLsnTiNigvlg+SWIJrvCw==";
+    let response = client
+        .get("/sendgrid")
+        .header(Header::new(
+            "X-Twilio-Email-Event-Webhook-Signature",
+            signature,
+        ))
+        .header(Header::new(
+            "X-Twilio-Email-Event-Webhook-Timestamp",
+            timestamp,
+        ))
         .body(payload)
         .dispatch();
 

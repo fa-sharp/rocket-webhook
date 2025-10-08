@@ -4,7 +4,7 @@ use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use crate::webhooks::{Webhook, interface::WebhookHmac};
+use crate::webhooks::{Webhook, interface::hmac::WebhookHmac};
 
 /// # Slack webhook
 /// Looks for hex signature in `X-Slack-Signature` header, with a 'v0=' prefix,
@@ -19,15 +19,6 @@ pub struct SlackWebhook {
     name: &'static str,
     #[builder(with = |secret: impl Into<Vec<u8>>| Zeroizing::new(secret.into()))]
     secret_key: Zeroizing<Vec<u8>>,
-}
-
-impl SlackWebhook {
-    pub fn new(name: &'static str, secret_key: Vec<u8>) -> Self {
-        Self {
-            name,
-            secret_key: Zeroizing::new(secret_key),
-        }
-    }
 }
 
 impl Webhook for SlackWebhook {

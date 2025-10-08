@@ -18,7 +18,7 @@ pub trait Webhook {
     ) -> impl Future<Output = Outcome<'_, Vec<u8>, String>> + Send + Sync;
 
     /// Retrieve a header that's expected for a webhook request. The default
-    /// implementation looks for the header and returns an error if it was not provided.
+    /// implementation looks for the header and returns a Bad Request error if it was not provided.
     /// It can also optionally strip a given prefix.
     fn get_header<'r>(
         &self,
