@@ -59,6 +59,42 @@ struct GithubPayload {
 ```
 
 
+# Handling errors
+By default, the webhook data guards will return Bad Request (400) for invalid requests (e.g. missing headers) and
+Unauthorized (401) for signature validation failures. Rocket's error handlers can be overridden using
+[catchers](https://rocket.rs/guide/v0.5/requests/#error-catchers) scoped to a specific path.
+
+If you need more control over how to
+process and respond to webhook errors, you can wrap the data guards with a Result, using
+the [WebhookError] as the Error type. You can then match on the result and handle the response as desired.
+
+```
+use rocket::{routes, post, serde::{Serialize, Deserialize}};
+use rocket::http::Status;
+use rocket_webhook::{
+    WebhookError, WebhookPayload,
+    webhooks::built_in::{GitHubWebhook},
+};
+
+#[post("/api/webhooks/github", data = "<payload_result>")]
+async fn github_route(
+    payload_result: Result<WebhookPayload<'_, GithubPayload, GitHubWebhook>, WebhookError>,
+) -> (Status, &'static str) {
+    match payload_result {
+        Ok(payload) => (Status::Ok, "Yay!"),
+        Err(err) => match err {
+            WebhookError::InvalidSignature(_) => (Status::Unauthorized, "Yikes!"),
+            _ => (Status::UnprocessableEntity, "Oof!")
+        }
+    }
+}
+
+/// Payload to deserialize
+#[derive(Debug, Serialize, Deserialize)]
+struct GithubPayload {
+    action: String,
+}
+```
 */
 
 use std::marker::PhantomData;
@@ -83,7 +119,7 @@ Webhook configuration stored in Rocket state.
 use rocket::{Rocket, Build};
 use rocket_webhook::{
     RocketWebhook, RocketWebhookRegister,
-    webhooks::built_in::{GitHubWebhook, SlackWebhook},
+    webhooks::built_in::{GitHubWebhook},
 };
 
 fn setup_webhooks(rocket: Rocket<Build>) -> Rocket<Build> {
