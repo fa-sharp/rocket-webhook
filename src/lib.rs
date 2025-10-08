@@ -95,6 +95,54 @@ struct GithubPayload {
     action: String,
 }
 ```
+
+# Multiple with same provider
+If you want to receive webhooks from multiple accounts with the same provider, you'll need to pass
+in a marker struct when building the webhooks and using the data guards. This is needed to discriminate
+between the two webhooks in Rocket's internal state.
+
+```
+use rocket::{get, routes};
+use rocket_webhook::{
+    RocketWebhook, RocketWebhookRegister, WebhookPayloadRaw, webhooks::built_in::SlackWebhook,
+};
+
+// Create a marker struct for each account
+struct SlackAccount1;
+struct SlackAccount2;
+
+#[test]
+fn two_slack_accounts() {
+    let slack_1 = SlackWebhook::builder().secret_key("slack-1-secret").build();
+    let webhook_1 = RocketWebhook::builder()
+        .webhook(slack_1)
+        .marker(SlackAccount1) // pass in the marker here
+        .build();
+    let slack_2 = SlackWebhook::builder().secret_key("slack-2-secret").build();
+    let webhook_2 = RocketWebhook::builder()
+        .webhook(slack_2)
+        .marker(SlackAccount2) // pass in the marker here
+        .build();
+
+    let rocket = RocketWebhookRegister::new(rocket::build())
+        .add_with_marker(webhook_1)
+        .add_with_marker(webhook_2)
+        .register()
+        .mount("/", routes![slack1_route, slack2_route]);
+}
+
+// Use the marker as the last type parameter in the data guard:
+
+#[get("/slack-1", data = "<payload>")]
+async fn slack1_route(payload: WebhookPayloadRaw<'_, SlackWebhook, SlackAccount1>) -> Vec<u8> {
+    payload.data
+}
+
+#[get("/slack-2", data = "<payload>")]
+async fn slack2_route(payload: WebhookPayloadRaw<'_, SlackWebhook, SlackAccount2>) -> Vec<u8> {
+    payload.data
+}
+```
 */
 
 use std::marker::PhantomData;

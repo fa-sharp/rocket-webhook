@@ -17,7 +17,7 @@ use crate::{
 /// Public key algorithms
 pub mod algorithms;
 
-/// Trait for algorithms to use for assymetric key verification
+/// Trait for algorithms to use for asymmetric key verification
 pub trait WebhookPublicKeyAlgorithm {
     fn verify(public_key: &Bytes, message: &[u8], signature: &[u8]) -> Result<(), String>;
 }

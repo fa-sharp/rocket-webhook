@@ -1,3 +1,5 @@
+//! Tests for built-in webhooks
+
 use rocket::{
     get,
     http::{Header, Status},
