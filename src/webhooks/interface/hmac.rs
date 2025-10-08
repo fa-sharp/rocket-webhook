@@ -34,9 +34,8 @@ pub trait WebhookHmac: Webhook {
         Outcome::Success(None)
     }
 
-    /// Read the request body and verify the HMAC signature. The default implementation calculates the HMAC
-    /// directly from the raw streamed body (with a prefix if configured). You can override the implementation
-    /// if the signature is calculated differently - the other trait functions will be ignored.
+    /// Read the request body and verify the HMAC signature. Calculates the HMAC
+    /// directly from the raw streamed body (with a prefix if configured).
     fn read_and_verify_with_hmac<'r>(
         &self,
         req: &'r Request<'_>,
@@ -67,7 +66,7 @@ pub trait WebhookHmac: Webhook {
                 match chunk_result {
                     Ok(chunk_bytes) => {
                         mac.update(&chunk_bytes);
-                        raw_body.extend(chunk_bytes);
+                        raw_body.extend_from_slice(&chunk_bytes);
                     }
                     Err(e) => {
                         return Outcome::Error((Status::BadRequest, WebhookError::ReadError(e)));
