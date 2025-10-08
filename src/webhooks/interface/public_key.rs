@@ -41,8 +41,7 @@ pub trait WebhookPublicKey: Webhook {
     fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError>;
 
     /// Get the message that needs to be verified. Any adjustments can be made to the body here
-    /// before calculating the signature (e.g. prefixes or hashes or other random things that the
-    /// provider has decided to do).
+    /// before calculating the signature (e.g. prefixes or hashes, etc.)
     ///
     /// Uses the [tokio_util::bytes::Bytes] struct to avoid unnecessary cloning of the body.
     #[allow(unused_variables)]

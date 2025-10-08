@@ -1,7 +1,7 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
 use bon::bon;
 use rocket::{data::Outcome, http::Status, outcome::try_outcome};
-use tokio_util::bytes::{BufMut, Bytes, BytesMut};
+use tokio_util::bytes::{Bytes, BytesMut};
 
 use crate::{
     WebhookError,
@@ -85,8 +85,8 @@ impl WebhookPublicKey for SendGridWebhook {
         let timestamp =
             try_outcome!(self.get_header(req, "X-Twilio-Email-Event-Webhook-Timestamp", None));
         let mut timestamp_and_body = BytesMut::with_capacity(timestamp.len() + body.len());
-        timestamp_and_body.put(timestamp.as_bytes());
-        timestamp_and_body.put(body.clone());
+        timestamp_and_body.extend_from_slice(timestamp.as_bytes());
+        timestamp_and_body.extend_from_slice(body);
 
         Outcome::Success(timestamp_and_body.freeze())
     }

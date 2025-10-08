@@ -19,19 +19,27 @@ pub enum WebhookError {
 
 impl Display for WebhookError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let error_str = match self {
-            WebhookError::InvalidSignature(e) => format!("Failed to validate signature: {e}"),
-            WebhookError::MissingHeader(name) => format!("Missing header '{name}'"),
-            WebhookError::InvalidHeader(err) => format!("Header has invalid format: {err}"),
+        match self {
+            WebhookError::InvalidSignature(e) => write!(f, "Failed to validate signature: {e}"),
+            WebhookError::MissingHeader(name) => write!(f, "Missing header '{name}'"),
+            WebhookError::InvalidHeader(err) => write!(f, "Header has invalid format: {err}"),
             WebhookError::Deserialize(err) => {
-                format!("Failed to deserialize webhook payload: {err}")
+                write!(f, "Failed to deserialize webhook payload: {err}")
             }
-            WebhookError::ReadError(err) => format!("Failed to read webhook body: {err}"),
-            WebhookError::NotAttached => "Webhook of this type is not attached to Rocket".into(),
-        };
-
-        f.write_str(&error_str)
+            WebhookError::ReadError(err) => write!(f, "Failed to read webhook body: {err}"),
+            WebhookError::NotAttached => {
+                write!(f, "Webhook of this type is not attached to Rocket")
+            }
+        }
     }
 }
 
-impl Error for WebhookError {}
+impl Error for WebhookError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            WebhookError::Deserialize(err) => Some(err),
+            WebhookError::ReadError(err) => Some(err),
+            _ => None,
+        }
+    }
+}
