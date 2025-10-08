@@ -7,7 +7,9 @@ use rocket::{
 };
 use rocket_webhook::{
     RocketWebhook, RocketWebhookRegister, WebhookPayload, WebhookPayloadRaw,
-    webhooks::built_in::{GitHubWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook},
+    webhooks::built_in::{
+        DiscordWebhook, GitHubWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -61,7 +63,7 @@ fn github() {
         .json(&payload)
         .dispatch();
 
-    assert_eq!(response.status(), Status::BadRequest);
+    assert_eq!(response.status(), Status::Unauthorized);
 }
 
 #[get("/slack", data = "<payload>")]
@@ -102,7 +104,7 @@ fn slack() {
         .json(&payload)
         .dispatch();
 
-    assert_eq!(response.status(), Status::BadRequest);
+    assert_eq!(response.status(), Status::Unauthorized);
 
     // missing timestamp header
     let response = client
@@ -185,4 +187,33 @@ fn stripe() {
             object: "event".into()
         })
     );
+}
+
+#[get("/discord", data = "<payload>")]
+async fn discord_route(payload: WebhookPayloadRaw<'_, DiscordWebhook>) -> Vec<u8> {
+    payload.data
+}
+
+#[test]
+fn discord() {
+    let public_key =
+        hex::decode("25B573092C76A64F7588FDDF76CD7C53774099C163A53A039D314C0EBD323C92").unwrap();
+    let discord_webhook = DiscordWebhook::builder().public_key(public_key).build();
+    let webhook = RocketWebhook::builder().webhook(discord_webhook).build();
+    let rocket = rocket::build().mount("/", routes![discord_route]);
+    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
+
+    let client = Client::tracked(rocket).unwrap();
+    let payload = "hello discord";
+    let timestamp = "1759897407";
+    let signature = "85E8E58CD6B8385F6E8BDB00E614AF8315037B90F97F2E25D340B78A38EDD586B048BDD3DA7E89F0CC53FFF2C4D78A42DB1A070A0AE3234A590EF2A49C654106";
+    let response = client
+        .get("/discord")
+        .header(Header::new("X-Signature-Ed25519", signature))
+        .header(Header::new("X-Signature-Timestamp", timestamp))
+        .body(payload)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.into_string(), Some(payload.into()));
 }

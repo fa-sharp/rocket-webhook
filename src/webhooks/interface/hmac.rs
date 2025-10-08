@@ -1,15 +1,11 @@
 use hmac::{Mac, digest::KeyInit};
 use rocket::{
-    Request,
-    data::Outcome,
-    futures::StreamExt,
-    http::{HeaderMap, Status},
-    outcome::try_outcome,
+    Request, data::Outcome, futures::StreamExt, http::Status, outcome::try_outcome,
     tokio::io::AsyncRead,
 };
 use tokio_util::io::ReaderStream;
 
-use crate::webhooks::Webhook;
+use crate::webhooks::{Webhook, interface::body_size};
 
 /// Trait for webhooks that use HMAC signature validation.
 pub trait WebhookHmac: Webhook {
@@ -30,9 +26,9 @@ pub trait WebhookHmac: Webhook {
     }
 
     /// Read the request body and verify the HMAC signature. The default implementation calculates the HMAC
-    /// directly from the raw streamed body (with a prefix if configured). You can provide your own implementation
+    /// directly from the raw streamed body (with a prefix if configured). You can override the implementation
     /// if the signature is calculated differently - the other trait functions will be ignored.
-    fn read_body_and_hmac<'r>(
+    fn read_and_verify_with_hmac<'r>(
         &self,
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
@@ -75,17 +71,10 @@ pub trait WebhookHmac: Webhook {
 
             // Verify signature
             if let Err(e) = mac.verify_slice(&expected_signature) {
-                return Outcome::Error((Status::BadRequest, format!("Invalid signature: {e}")));
+                return Outcome::Error((Status::Unauthorized, format!("Invalid signature: {e}")));
             }
 
             Outcome::Success(raw_body)
         }
     }
-}
-
-/// Try reading the body size from the content length header
-fn body_size(headers: &HeaderMap) -> Option<usize> {
-    headers
-        .get_one("Content-Length")
-        .and_then(|len| len.parse().ok())
 }

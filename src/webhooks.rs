@@ -5,7 +5,7 @@ use rocket::{Request, data::Outcome, http::Status, tokio::io::AsyncRead};
 pub mod built_in;
 pub mod interface;
 
-/// Shared interface for all webhooks
+/// Base interface for all webhooks
 pub trait Webhook {
     /// Name of the webhook
     fn name(&self) -> &'static str;

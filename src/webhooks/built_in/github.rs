@@ -14,7 +14,7 @@ use crate::webhooks::{Webhook, interface::WebhookHmac};
 pub struct GitHubWebhook {
     #[builder(default = "GitHub webhook")]
     name: &'static str,
-    #[builder(with = |secret: Vec<u8>| Zeroizing::new(secret))]
+    #[builder(with = |secret: impl Into<Vec<u8>>| Zeroizing::new(secret.into()))]
     secret_key: Zeroizing<Vec<u8>>,
 }
 
@@ -37,7 +37,7 @@ impl Webhook for GitHubWebhook {
         req: &'r Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
     ) -> Outcome<'_, Vec<u8>, String> {
-        let raw_body = try_outcome!(self.read_body_and_hmac(req, body).await);
+        let raw_body = try_outcome!(self.read_and_verify_with_hmac(req, body).await);
         Outcome::Success(raw_body)
     }
 }
