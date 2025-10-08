@@ -69,7 +69,6 @@ use rocket::{Build, Rocket, async_trait, fairing};
 mod guard;
 pub mod webhooks;
 pub use guard::{WebhookPayload, WebhookPayloadRaw};
-pub use hmac;
 
 use crate::webhooks::Webhook;
 
@@ -180,7 +179,7 @@ impl fairing::Fairing for RocketWebhookFairing {
     fn info(&self) -> fairing::Info {
         fairing::Info {
             name: self.name,
-            kind: fairing::Kind::Ignite | fairing::Kind::Singleton,
+            kind: fairing::Kind::Ignite,
         }
     }
 }

@@ -24,6 +24,9 @@ jobs:
         with:
           tool: nextest@0.9
 
+      - name: Cargo check all features
+        run: cargo hack check --each-feature --no-dev-deps
+
       - name: Build tests
         run: cargo build --tests --all-features -p rocket-webhook
 

@@ -2,10 +2,8 @@
 
 use rocket::{Request, data::Outcome, http::Status, tokio::io::AsyncRead};
 
-mod interface;
-
 pub mod built_in;
-pub use interface::WebhookHmac;
+pub mod interface;
 
 /// Shared interface for all webhooks
 pub trait Webhook {

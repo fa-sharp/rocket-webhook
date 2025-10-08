@@ -1,11 +1,11 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
 use bon::Builder;
 use hmac::Hmac;
-use rocket::outcome::try_outcome;
+use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::io::AsyncRead};
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use super::*;
+use crate::webhooks::{Webhook, interface::WebhookHmac};
 
 /// # Shopify webhook
 /// Looks for base64 signature in `X-Shopify-Hmac-Sha256` header
