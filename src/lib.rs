@@ -24,10 +24,10 @@ use rocket_webhook::{
 #[rocket::launch]
 fn rocket() -> _ {
     let github_webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::new("GitHub webhook", b"my-github-secret".to_vec()))
+        .webhook(GitHubWebhook::builder().secret_key(b"my-github-secret").build())
         .build();
     let slack_webhook = RocketWebhook::builder()
-        .webhook(SlackWebhook::new("Slack webhook", b"my-slack-secret".to_vec()))
+        .webhook(SlackWebhook::builder().secret_key(b"my-slack-secret").build())
         .build();
 
     let rocket = rocket::build().mount("/", routes![github_route]);
@@ -86,7 +86,7 @@ use rocket_webhook::{
 
 fn setup_webhooks(rocket: Rocket<Build>) -> Rocket<Build> {
     let github_webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::new("GitHub webhook", b"my-github-secret".to_vec()))
+        .webhook(GitHubWebhook::builder().secret_key(b"my-github-secret").build())
         .max_body_size(1024 * 10)
         .build();
     let rocket = RocketWebhookRegister::new(rocket).add(github_webhook).register();
@@ -120,7 +120,7 @@ use rocket_webhook::{
 
 let rocket = rocket::build();
 let github_webhook = RocketWebhook::builder()
-    .webhook(GitHubWebhook::new("GitHub webhook", b"my-github-secret".to_vec()))
+    .webhook(GitHubWebhook::builder().secret_key(b"my-github-secret").build())
     .build();
 let rocket = RocketWebhookRegister::new(rocket).add(github_webhook).register();
 ```
