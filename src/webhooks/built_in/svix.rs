@@ -1,5 +1,5 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use bon::Builder;
+use bon::bon;
 use hmac::Hmac;
 use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::io::AsyncRead};
 use sha2::Sha256;
@@ -18,12 +18,25 @@ use crate::{
 /// Signature is base64 HMAC of `<id>.<timestamp>.<body>`
 ///
 /// [Svix docs](https://docs.svix.com/receiving/verifying-payloads/how-manual)
-#[derive(Builder)]
 pub struct SvixWebhook {
-    #[builder(default = "Slack webhook")]
     name: &'static str,
-    #[builder(with = |secret: impl Into<Vec<u8>>| Zeroizing::new(secret.into()))]
     secret_key: Zeroizing<Vec<u8>>,
+}
+
+#[bon]
+impl SvixWebhook {
+    #[builder]
+    pub fn new(
+        #[builder(default = "Svix webhook")] name: &'static str,
+        secret_key: impl AsRef<str>,
+    ) -> Result<Self, base64::DecodeError> {
+        let stripped_key = secret_key
+            .as_ref()
+            .strip_prefix("whsec_")
+            .unwrap_or(secret_key.as_ref());
+        let secret_key = Zeroizing::new(BASE64_STANDARD.decode(stripped_key)?);
+        Ok(Self { name, secret_key })
+    }
 }
 
 impl Webhook for SvixWebhook {
@@ -55,6 +68,7 @@ impl WebhookHmac for SvixWebhook {
         Outcome::Success(Some(prefix))
     }
 
+    /// Multiple space delimited signatures in header, prefixed by `v1,`
     fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
         const SIG_HEADER: &str = "svix-signature";
 

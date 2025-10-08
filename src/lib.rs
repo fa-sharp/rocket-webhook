@@ -97,8 +97,8 @@ struct GithubPayload {
 ```
 
 # Multiple with same provider
-If you want to receive webhooks from multiple accounts with the same provider, you'll need to pass
-in a marker struct when building the webhooks and using the data guards. This is needed to discriminate
+If you want to receive webhooks using multiple accounts/keys from the same provider, you'll need to pass
+in a marker struct when building the webhooks and using the data guards. This is needed to distinguish
 between the two webhooks in Rocket's internal state.
 
 ```
@@ -107,7 +107,7 @@ use rocket_webhook::{
     RocketWebhook, RocketWebhookRegister, WebhookPayloadRaw, webhooks::built_in::SlackWebhook,
 };
 
-// Create a marker struct for each account
+// Create a marker struct for each account/key
 struct SlackAccount1;
 struct SlackAccount2;
 

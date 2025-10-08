@@ -4,13 +4,14 @@ use rocket::{
     get,
     http::{Header, Status},
     local::blocking::Client,
-    routes,
+    post, routes,
     serde::json::{Json, json},
 };
 use rocket_webhook::{
     RocketWebhook, RocketWebhookRegister, WebhookPayload, WebhookPayloadRaw,
     webhooks::built_in::{
-        DiscordWebhook, GitHubWebhook, SendGridWebhook, ShopifyWebhook, SlackWebhook, StripeWebhook,
+        DiscordWebhook, GitHubWebhook, SendGridWebhook, ShopifyWebhook, SlackWebhook,
+        StripeWebhook, SvixWebhook,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -251,4 +252,49 @@ fn sendgrid() {
 
     assert_eq!(response.status(), Status::Ok);
     assert_eq!(response.into_string(), Some(payload.into()));
+}
+
+#[post("/svix", data = "<payload>")]
+async fn svix_route(payload: WebhookPayload<'_, SvixPayload, SvixWebhook>) -> Json<SvixPayload> {
+    Json(payload.data)
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct SvixPayload {
+    event_type: String,
+    success: bool,
+}
+
+#[test]
+fn svix() {
+    let svix_webhook = SvixWebhook::builder()
+        .secret_key("whsec_x9J8mHVs08bY9qRsE3un7nW8")
+        .build()
+        .expect("should be valid base64");
+    let rocket = RocketWebhookRegister::new(rocket::build())
+        .add(RocketWebhook::builder().webhook(svix_webhook).build())
+        .register()
+        .mount("/", routes![svix_route]);
+
+    let client = Client::tracked(rocket).unwrap();
+    let payload = json!({ "event_type":"ping", "success":true});
+    let id = "msg_CGEWVFV0jBkqRIfP";
+    let timestamp = "1759933695";
+    let signature = "v1,waXhsxOg6d11zKvCs7dg/PxN9dXETpdbalU1o3J66K4=";
+    let response = client
+        .post("/svix")
+        .header(Header::new("Svix-Id", id))
+        .header(Header::new("Svix-Timestamp", timestamp))
+        .header(Header::new("Svix-Signature", signature))
+        .json(&payload)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(
+        response.into_json(),
+        Some(SvixPayload {
+            event_type: "ping".into(),
+            success: true
+        })
+    );
 }
