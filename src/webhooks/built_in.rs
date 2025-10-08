@@ -29,3 +29,8 @@ pub use slack::SlackWebhook;
 mod stripe;
 #[cfg(feature = "stripe")]
 pub use stripe::StripeWebhook;
+
+#[cfg(feature = "svix")]
+mod svix;
+#[cfg(feature = "svix")]
+pub use svix::SvixWebhook;
