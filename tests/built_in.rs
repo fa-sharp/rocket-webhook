@@ -16,7 +16,7 @@ use rocket_webhook::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Time bounds to ignore timestamp for these tests (20 years in past)
+/// Time bounds to ignore timestamp for these tests (allow 20 years in past)
 const IGNORE_TIMESTAMP: (u32, u32) = (20 * 365 * 24 * 60 * 60, 0);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
