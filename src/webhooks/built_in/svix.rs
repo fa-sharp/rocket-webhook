@@ -28,6 +28,7 @@ impl SvixWebhook {
     #[builder]
     pub fn new(
         #[builder(default = "Svix webhook")] name: &'static str,
+        /// Svix secret key starting with `whsec_`
         secret_key: impl AsRef<str>,
     ) -> Result<Self, base64::DecodeError> {
         let stripped_key = secret_key
@@ -44,12 +45,13 @@ impl Webhook for SvixWebhook {
         self.name
     }
 
-    async fn read_body_and_validate<'r>(
+    async fn validate_body(
         &self,
-        req: &'r Request<'_>,
+        req: &Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
+        time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.read_and_verify_with_hmac(req, body).await);
+        let raw_body = try_outcome!(self.validate_with_hmac(req, body, time_bounds).await);
         Outcome::Success(raw_body)
     }
 }
@@ -61,18 +63,21 @@ impl WebhookHmac for SvixWebhook {
         &self.secret_key
     }
 
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
+    fn body_prefix(
+        &self,
+        req: &Request<'_>,
+        time_bounds: (u32, u32),
+    ) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
         let id = try_outcome!(self.get_header(req, "svix-id", None));
         let timestamp = try_outcome!(self.get_header(req, "svix-timestamp", None));
+        try_outcome!(self.validate_timestamp(timestamp, time_bounds));
+
         let prefix = [id.as_bytes(), b".", timestamp.as_bytes(), b"."].concat();
         Outcome::Success(Some(prefix))
     }
 
     /// Multiple space delimited signatures in header, prefixed by `v1,`
-    fn expected_signatures<'r>(
-        &self,
-        req: &'r Request<'_>,
-    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
+    fn expected_signatures(&self, req: &Request<'_>) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
         const SIG_HEADER: &str = "svix-signature";
 
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));

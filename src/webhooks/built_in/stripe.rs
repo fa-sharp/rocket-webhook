@@ -31,12 +31,13 @@ impl Webhook for StripeWebhook {
         self.name
     }
 
-    async fn read_body_and_validate<'r>(
+    async fn validate_body(
         &self,
-        req: &'r Request<'_>,
+        req: &Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
+        time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.read_and_verify_with_hmac(req, body).await);
+        let raw_body = try_outcome!(self.validate_with_hmac(req, body, time_bounds).await);
         Outcome::Success(raw_body)
     }
 }
@@ -48,10 +49,7 @@ impl WebhookHmac for StripeWebhook {
         &self.secret_key
     }
 
-    fn expected_signatures<'r>(
-        &self,
-        req: &'r Request<'_>,
-    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
+    fn expected_signatures(&self, req: &Request<'_>) -> Outcome<'_, Vec<Vec<u8>>, WebhookError> {
         let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
         let mut signatures = Vec::new();
         for hex_sig in header.split(',').filter_map(|s| s.strip_prefix("v1=")) {
@@ -71,17 +69,26 @@ impl WebhookHmac for StripeWebhook {
         Outcome::Success(signatures)
     }
 
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
-        let header = try_outcome!(self.get_header(req, SIG_HEADER, None));
-        let Some(time) = header.split(',').find_map(|part| part.strip_prefix("t=")) else {
+    fn body_prefix(
+        &self,
+        req: &Request<'_>,
+        time_bounds: (u32, u32),
+    ) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
+        let sig_header = try_outcome!(self.get_header(req, SIG_HEADER, None));
+        let Some(timestamp) = sig_header
+            .split(',')
+            .find_map(|part| part.strip_prefix("t="))
+        else {
             return Outcome::Error((
                 Status::BadRequest,
                 WebhookError::InvalidHeader(format!(
-                    "Did not find timestamp in header: '{header}'"
+                    "Did not find timestamp in header: '{sig_header}'"
                 )),
             ));
         };
-        let prefix = [time.as_bytes(), b"."].concat();
+        try_outcome!(self.validate_timestamp(timestamp, time_bounds));
+
+        let prefix = [timestamp.as_bytes(), b"."].concat();
         Outcome::Success(Some(prefix))
     }
 }

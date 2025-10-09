@@ -1,4 +1,7 @@
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use rocket::{
     Request, async_trait,
@@ -59,7 +62,9 @@ where
     ) -> Outcome<'r, Self, Self::Error> {
         let config: &RocketWebhook<W, D> = try_outcome!(get_webhook_from_state(req));
         let body = data.open(config.max_body_size.bytes());
-        let validated_body = try_outcome!(config.webhook.read_body_and_validate(req, body).await);
+        let time_bounds = get_timestamp_bounds(config.timestamp_tolerance);
+        let validated_body =
+            try_outcome!(config.webhook.validate_body(req, body, time_bounds).await);
 
         match serde_json::from_slice(&validated_body) {
             Ok(data) => Outcome::Success(Self {
@@ -116,7 +121,9 @@ where
     ) -> Outcome<'r, Self, Self::Error> {
         let config: &RocketWebhook<W, D> = try_outcome!(get_webhook_from_state(req));
         let body = data.open(config.max_body_size.bytes());
-        let validated_body = try_outcome!(config.webhook.read_body_and_validate(req, body).await);
+        let time_bounds = get_timestamp_bounds(config.timestamp_tolerance);
+        let validated_body =
+            try_outcome!(config.webhook.validate_body(req, body, time_bounds).await);
 
         Outcome::Success(Self {
             data: validated_body,
@@ -140,4 +147,12 @@ where
             return Outcome::Error((Status::InternalServerError, WebhookError::NotAttached));
         }
     }
+}
+
+fn get_timestamp_bounds((past_secs, future_secs): (u32, u32)) -> (u32, u32) {
+    let unix_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32; // Safe to use u32 until 2106
+    (unix_time - past_secs, unix_time + future_secs)
 }

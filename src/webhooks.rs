@@ -7,17 +7,38 @@ use crate::WebhookError;
 pub mod built_in;
 pub mod interface;
 
+mod utils;
+
 /// Base interface for all webhooks
 pub trait Webhook {
     /// Name of the webhook
     fn name(&self) -> &'static str;
 
-    /// Read body and validate webhook.
-    fn read_body_and_validate<'r>(
+    /// Read body and validate webhook. If the webhook uses a timestamp, verify that it
+    /// is within the expected bounds (bounds are in unix epoch seconds).
+    fn validate_body(
         &self,
-        req: &'r Request<'_>,
+        req: &Request<'_>,
         body_reader: impl AsyncRead + Unpin + Send + Sync,
+        time_bounds: (u32, u32),
     ) -> impl Future<Output = Outcome<'_, Vec<u8>, WebhookError>> + Send + Sync;
+
+    /// Validate a timestamp against the given bounds. The default implementation assumes
+    /// that it is in Unix epoch seconds.
+    fn validate_timestamp(
+        &self,
+        timestamp: &str,
+        (min, max): (u32, u32),
+    ) -> Outcome<'_, (), WebhookError> {
+        let unix_timestamp = timestamp.parse::<u32>().ok();
+        match unix_timestamp.map(|t| t >= min && t <= max) {
+            Some(true) => Outcome::Success(()),
+            Some(false) | None => Outcome::Error((
+                Status::BadRequest,
+                WebhookError::Timestamp(timestamp.into()),
+            )),
+        }
+    }
 
     /// Retrieve a header that's expected for a webhook request. The default
     /// implementation looks for the header and returns a Bad Request error if it was not provided.
@@ -28,20 +49,20 @@ pub trait Webhook {
         name: &str,
         prefix: Option<&str>,
     ) -> Outcome<'_, &'r str, WebhookError> {
-        match req.headers().get_one(name) {
-            Some(value) => match prefix {
-                None => Outcome::Success(value),
-                Some(prefix) => match value.strip_prefix(prefix) {
-                    Some(stripped) => Outcome::Success(stripped),
-                    None => Outcome::Error((
-                        Status::BadRequest,
-                        WebhookError::InvalidHeader(format!(
-                            "'{name}' is missing prefix '{prefix}': {value}"
-                        )),
+        let Some(mut header) = req.headers().get_one(name) else {
+            return Outcome::Error((Status::BadRequest, WebhookError::MissingHeader(name.into())));
+        };
+        if let Some(prefix) = prefix {
+            let Some(stripped) = header.strip_prefix(prefix) else {
+                return Outcome::Error((
+                    Status::BadRequest,
+                    WebhookError::InvalidHeader(format!(
+                        "'{name}' is missing prefix '{prefix}': {header}"
                     )),
-                },
-            },
-            None => Outcome::Error((Status::BadRequest, WebhookError::MissingHeader(name.into()))),
+                ));
+            };
+            header = stripped;
         }
+        Outcome::Success(header)
     }
 }

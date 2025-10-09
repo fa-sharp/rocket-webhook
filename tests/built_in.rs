@@ -16,6 +16,9 @@ use rocket_webhook::{
 };
 use serde::{Deserialize, Serialize};
 
+/// Time bounds to ignore timestamp for these tests (20 years in past)
+const IGNORE_TIMESTAMP: (u32, u32) = (20 * 365 * 24 * 60 * 60, 0);
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct GithubPayload {
     action: String,
@@ -76,7 +79,10 @@ fn slack() {
     let slack_webhook = SlackWebhook::builder()
         .secret_key(b"8f742231b10e8888abcd99yyyzzz85a5")
         .build();
-    let webhook = RocketWebhook::builder().webhook(slack_webhook).build();
+    let webhook = RocketWebhook::builder()
+        .webhook(slack_webhook)
+        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .build();
     let rocket = RocketWebhookRegister::new(rocket::build())
         .add(webhook)
         .register()
@@ -157,7 +163,10 @@ async fn stripe_route(
 #[test]
 fn stripe() {
     let stripe_webhook = StripeWebhook::builder().secret_key("test-secret").build();
-    let webhook = RocketWebhook::builder().webhook(stripe_webhook).build();
+    let webhook = RocketWebhook::builder()
+        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .webhook(stripe_webhook)
+        .build();
     let rocket = rocket::build().mount("/", routes![stripe_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
 
@@ -198,7 +207,10 @@ fn discord() {
         .public_key(public_key)
         .build()
         .expect("should be valid hex");
-    let webhook = RocketWebhook::builder().webhook(discord_webhook).build();
+    let webhook = RocketWebhook::builder()
+        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .webhook(discord_webhook)
+        .build();
     let rocket = rocket::build().mount("/", routes![discord_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
 
@@ -230,7 +242,10 @@ fn sendgrid() {
         .public_key(public_key)
         .build()
         .expect("should be valid base64");
-    let webhook = RocketWebhook::builder().webhook(sendgrid_webhook).build();
+    let webhook = RocketWebhook::builder()
+        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .webhook(sendgrid_webhook)
+        .build();
     let rocket = rocket::build().mount("/", routes![sendgrid_route]);
     let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
 
@@ -273,7 +288,12 @@ fn svix() {
         .build()
         .expect("should be valid base64");
     let rocket = RocketWebhookRegister::new(rocket::build())
-        .add(RocketWebhook::builder().webhook(svix_webhook).build())
+        .add(
+            RocketWebhook::builder()
+                .timestamp_tolerance(IGNORE_TIMESTAMP)
+                .webhook(svix_webhook)
+                .build(),
+        )
         .register()
         .mount("/", routes![svix_route]);
 

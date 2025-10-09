@@ -40,12 +40,13 @@ impl Webhook for DiscordWebhook {
         self.name
     }
 
-    async fn read_body_and_validate<'r>(
+    async fn validate_body(
         &self,
-        req: &'r rocket::Request<'_>,
-        body_reader: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
+        req: &rocket::Request<'_>,
+        body: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
+        time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.read_and_verify_with_public_key(req, body_reader).await);
+        let raw_body = try_outcome!(self.validate_with_public_key(req, body, time_bounds).await);
         Outcome::Success(raw_body)
     }
 }
@@ -53,17 +54,11 @@ impl Webhook for DiscordWebhook {
 impl WebhookPublicKey for DiscordWebhook {
     type ALG = Ed25519;
 
-    async fn public_key<'r>(
-        &self,
-        _req: &'r rocket::Request<'_>,
-    ) -> Outcome<'_, Bytes, WebhookError> {
+    async fn public_key(&self, _req: &rocket::Request<'_>) -> Outcome<'_, Bytes, WebhookError> {
         Outcome::Success(self.public_key.clone())
     }
 
-    fn expected_signature<'r>(
-        &self,
-        req: &'r rocket::Request<'_>,
-    ) -> Outcome<'_, Vec<u8>, WebhookError> {
+    fn expected_signature(&self, req: &rocket::Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError> {
         let sig_header = try_outcome!(self.get_header(req, "X-Signature-Ed25519", None));
         match hex::decode(sig_header) {
             Ok(bytes) => Outcome::Success(bytes),
@@ -76,12 +71,15 @@ impl WebhookPublicKey for DiscordWebhook {
         }
     }
 
-    fn message_to_verify<'r>(
+    fn message_to_verify(
         &self,
-        req: &'r rocket::Request<'_>,
+        req: &rocket::Request<'_>,
         body: &Bytes,
+        time_bounds: (u32, u32),
     ) -> Outcome<'_, Bytes, WebhookError> {
         let timestamp = try_outcome!(self.get_header(req, "X-Signature-Timestamp", None));
+        try_outcome!(self.validate_timestamp(timestamp, time_bounds));
+
         let mut timestamp_and_body = BytesMut::with_capacity(timestamp.len() + body.len());
         timestamp_and_body.extend_from_slice(timestamp.as_bytes());
         timestamp_and_body.extend_from_slice(body);

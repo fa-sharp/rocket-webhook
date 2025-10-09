@@ -10,7 +10,7 @@ use tokio_util::io::ReaderStream;
 
 use crate::{
     WebhookError,
-    webhooks::{Webhook, interface::body_size},
+    webhooks::{Webhook, utils::body_size},
 };
 
 /// Trait for webhooks that use HMAC signature validation.
@@ -23,29 +23,31 @@ pub trait WebhookHmac: Webhook {
 
     /// Get the expected signature(s) from the request. To obtain required headers,
     /// you can use the `self.get_header()` utility.
-    fn expected_signatures<'r>(
-        &self,
-        req: &'r Request<'_>,
-    ) -> Outcome<'_, Vec<Vec<u8>>, WebhookError>;
+    fn expected_signatures(&self, req: &Request<'_>) -> Outcome<'_, Vec<Vec<u8>>, WebhookError>;
 
     /// An optional prefix to attach to the raw body when calculating the signature
     #[allow(unused_variables)]
-    fn body_prefix<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
+    fn body_prefix(
+        &self,
+        req: &Request<'_>,
+        time_bounds: (u32, u32),
+    ) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
         Outcome::Success(None)
     }
 
     /// Read the request body and verify the HMAC signature. Calculates the HMAC
     /// directly from the raw streamed body (with a prefix if configured).
-    fn read_and_verify_with_hmac<'r>(
+    fn validate_with_hmac(
         &self,
-        req: &'r Request<'_>,
+        req: &Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
+        time_bounds: (u32, u32),
     ) -> impl Future<Output = Outcome<'_, Vec<u8>, WebhookError>> + Send + Sync
     where
         Self: Sync,
         Self::MAC: Sync,
     {
-        async {
+        async move {
             // Get expected signatures from request
             let expected_signatures = try_outcome!(self.expected_signatures(req));
 
@@ -55,7 +57,7 @@ pub trait WebhookHmac: Webhook {
                 .expect("HMAC should take any key length");
 
             // Update HMAC with prefix if there is one
-            if let Some(prefix) = try_outcome!(self.body_prefix(req)) {
+            if let Some(prefix) = try_outcome!(self.body_prefix(req, time_bounds)) {
                 mac.update(&prefix);
             }
 
@@ -69,7 +71,7 @@ pub trait WebhookHmac: Webhook {
                         raw_body.extend_from_slice(&chunk_bytes);
                     }
                     Err(e) => {
-                        return Outcome::Error((Status::BadRequest, WebhookError::ReadError(e)));
+                        return Outcome::Error((Status::BadRequest, WebhookError::Read(e)));
                     }
                 }
             }
@@ -83,7 +85,7 @@ pub trait WebhookHmac: Webhook {
             }
             return Outcome::Error((
                 Status::Unauthorized,
-                WebhookError::InvalidSignature("HMAC didn't match any provided signature".into()),
+                WebhookError::Signature("HMAC didn't match any provided signature".into()),
             ));
         }
     }

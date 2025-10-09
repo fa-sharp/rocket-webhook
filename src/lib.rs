@@ -188,6 +188,10 @@ pub struct RocketWebhook<W, D = W> {
     /// The max body size of the webhook request in bytes (default: 64 KB)
     #[builder(default = 1024 * 64)]
     max_body_size: u32,
+    /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
+    /// (default: 5 minutes in past, 15 seconds in future)
+    #[builder(default = (5 * 60, 15))]
+    timestamp_tolerance: (u32, u32),
     /// A marker to distinguish between webhooks of the same type
     #[builder(default, with = |d: D| PhantomData)]
     _marker: PhantomData<D>,
