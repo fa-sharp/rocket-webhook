@@ -1,8 +1,9 @@
+#![allow(unused)]
+
 //! Stripe webhook example. You can test this locally with the Stripe CLI:
 //!
 //! ```stripe listen -f http://localhost:8000/api/webhook/stripe```
-//!
-//! ```STRIPE_WEBHOOK_SECRET=xxxxx cargo run --features stripe --example stripe```
+//! ```STRIPE_SECRET=xxxxx cargo run --features stripe --example stripe```
 
 use std::env;
 
@@ -14,8 +15,7 @@ use serde::Deserialize;
 
 #[launch]
 fn rocket() -> _ {
-    let webhook_secret =
-        env::var("STRIPE_WEBHOOK_SECRET").expect("Env var STRIPE_WEBHOOK_SECRET is not set");
+    let webhook_secret = env::var("STRIPE_SECRET").expect("Env var STRIPE_SECRET is not set");
     let webhook = RocketWebhook::builder()
         .webhook(StripeWebhook::builder().secret_key(webhook_secret).build())
         .max_body_size(10 * 1024)
@@ -30,7 +30,6 @@ fn rocket() -> _ {
 
 #[derive(Debug, Deserialize)]
 pub struct StripeEvent {
-    #[allow(unused)]
     data: Value,
     #[serde(rename = "type")]
     type_: String,

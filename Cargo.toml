@@ -17,6 +17,7 @@ tokio-util = { version = "0.7", features = ["io"], optional = true }
 zeroize = { version = "1.8", optional = true }
 
 [dev-dependencies]
+reqwest = "0.12.23"
 serde = "1.0.228"
 
 [features]
