@@ -1,4 +1,6 @@
 # Rocket Webhook
+[![CI](https://github.com/fa-sharp/rocket-flex-session/actions/workflows/lib.yml/badge.svg)](https://github.com/fa-sharp/rocket-flex-session/actions/workflows/lib.yml)
+[![Crates.io Version](https://img.shields.io/crates/v/rocket_flex_session)](https://crates.io/crates/rocket_flex_session)
 
 ⚠️ **This crate is in alpha and may not work as expected yet.**
 
@@ -25,7 +27,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rocket-webhook = "0.1.0-alpha"
+rocket-webhook = { version = "0.1.0-alpha", features = ["github", "slack"] } # Enable provider(s) you want to use
 serde = { version = "1.0", features = ["derive"] }
 ```
 
