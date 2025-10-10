@@ -22,6 +22,10 @@ categories = [
 ]
 exclude = [".config/", ".github/"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 base64 = { version = "0.22", optional = true }
 bon = "3.8"
