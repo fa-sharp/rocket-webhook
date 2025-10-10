@@ -1,5 +1,4 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use bon::bon;
 use hmac::Hmac;
 use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::io::AsyncRead};
 use sha2::Sha256;
@@ -19,40 +18,29 @@ use crate::{
 ///
 /// [Svix docs](https://docs.svix.com/receiving/verifying-payloads/how-manual)
 pub struct SvixWebhook {
-    name: &'static str,
     secret_key: Zeroizing<Vec<u8>>,
 }
 
-#[bon]
 impl SvixWebhook {
-    #[builder]
-    pub fn new(
-        #[builder(default = "Svix webhook")] name: &'static str,
-        /// Svix secret key starting with `whsec_`
-        secret_key: impl AsRef<str>,
-    ) -> Result<Self, base64::DecodeError> {
+    /// Instantiate using the secret key from Svix starting with `whsec_`
+    pub fn with_secret(secret_key: impl AsRef<str>) -> Result<Self, base64::DecodeError> {
         let stripped_key = secret_key
             .as_ref()
             .strip_prefix("whsec_")
             .unwrap_or(secret_key.as_ref());
         let secret_key = Zeroizing::new(BASE64_STANDARD.decode(stripped_key)?);
-        Ok(Self { name, secret_key })
+        Ok(Self { secret_key })
     }
 }
 
 impl Webhook for SvixWebhook {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
     async fn validate_body(
         &self,
         req: &Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
         time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.validate_with_hmac(req, body, time_bounds).await);
-        Outcome::Success(raw_body)
+        self.validate_with_hmac(req, body, time_bounds).await
     }
 }
 

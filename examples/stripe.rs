@@ -8,24 +8,20 @@
 use std::env;
 
 use rocket::{launch, post, routes, serde::json::Value};
-use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister, WebhookPayload, webhooks::built_in::StripeWebhook,
-};
+use rocket_webhook::{RocketWebhook, WebhookPayload, webhooks::built_in::StripeWebhook};
 use serde::Deserialize;
 
 #[launch]
 fn rocket() -> _ {
     let webhook_secret = env::var("STRIPE_SECRET").expect("Env var STRIPE_SECRET is not set");
     let webhook = RocketWebhook::builder()
-        .webhook(StripeWebhook::builder().secret_key(webhook_secret).build())
+        .webhook(StripeWebhook::with_secret(webhook_secret))
         .max_body_size(10 * 1024)
         .build();
 
-    let rocket = RocketWebhookRegister::new(rocket::build())
-        .add(webhook)
-        .register();
-
-    rocket.mount("/api", routes![stripe_endpoint])
+    rocket::build()
+        .manage(webhook)
+        .mount("/api", routes![stripe_endpoint])
 }
 
 #[derive(Debug, Deserialize)]

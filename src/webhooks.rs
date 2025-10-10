@@ -11,9 +11,6 @@ mod utils;
 
 /// Base interface for all webhooks
 pub trait Webhook {
-    /// Name of the webhook
-    fn name(&self) -> &'static str;
-
     /// Read body and validate webhook. If the webhook uses a timestamp, verify that it
     /// is within the expected bounds (bounds are in unix epoch seconds).
     fn validate_body(
@@ -24,7 +21,7 @@ pub trait Webhook {
     ) -> impl Future<Output = Outcome<'_, Vec<u8>, WebhookError>> + Send + Sync;
 
     /// Validate a timestamp against the given bounds. The default implementation assumes
-    /// that it is in Unix epoch seconds.
+    /// that it is in Unix epoch seconds, and returns a Bad Request error if it is invalid.
     fn validate_timestamp(
         &self,
         timestamp: &str,

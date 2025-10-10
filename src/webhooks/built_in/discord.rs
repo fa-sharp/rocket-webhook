@@ -1,4 +1,3 @@
-use bon::bon;
 use hex::FromHexError;
 use rocket::{data::Outcome, http::Status, outcome::try_outcome};
 use tokio_util::bytes::{Bytes, BytesMut};
@@ -18,36 +17,25 @@ use crate::{
 ///
 /// [Discord docs](https://discord.com/developers/docs/interactions/overview#setting-up-an-endpoint-validating-security-request-headers)
 pub struct DiscordWebhook {
-    name: &'static str,
     public_key: Bytes,
 }
 
-#[bon]
 impl DiscordWebhook {
-    #[builder]
-    pub fn new(
-        #[builder(default = "Discord webhook")] name: &'static str,
-        /// The hex public key from Discord
-        public_key: impl AsRef<str>,
-    ) -> Result<Self, FromHexError> {
+    /// Instantiate using the hex public key from Discord
+    pub fn with_public_key(public_key: impl AsRef<str>) -> Result<Self, FromHexError> {
         let public_key = Bytes::from(hex::decode(public_key.as_ref())?);
-        Ok(Self { name, public_key })
+        Ok(Self { public_key })
     }
 }
 
 impl Webhook for DiscordWebhook {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
     async fn validate_body(
         &self,
         req: &rocket::Request<'_>,
         body: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
         time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.validate_with_public_key(req, body, time_bounds).await);
-        Outcome::Success(raw_body)
+        self.validate_with_public_key(req, body, time_bounds).await
     }
 }
 

@@ -1,4 +1,3 @@
-use bon::Builder;
 use hmac::Hmac;
 use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::io::AsyncRead};
 use sha2::Sha256;
@@ -16,29 +15,29 @@ use crate::{
 /// Signature should be a digest of `<timestamp>.<body>`
 ///
 /// [Stripe docs](https://docs.stripe.com/webhooks?verify=verify-manually#verify-manually)
-#[derive(Builder)]
 pub struct StripeWebhook {
-    #[builder(default = "Stripe webhook")]
-    name: &'static str,
-    #[builder(with = |secret: impl Into<Vec<u8>>| Zeroizing::new(secret.into()))]
     secret_key: Zeroizing<Vec<u8>>,
+}
+
+impl StripeWebhook {
+    /// Instantiate with the secret key
+    pub fn with_secret(secret_key: impl Into<Vec<u8>>) -> Self {
+        Self {
+            secret_key: Zeroizing::new(secret_key.into()),
+        }
+    }
 }
 
 const SIG_HEADER: &str = "Stripe-Signature";
 
 impl Webhook for StripeWebhook {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
     async fn validate_body(
         &self,
         req: &Request<'_>,
         body: impl AsyncRead + Unpin + Send + Sync,
         time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.validate_with_hmac(req, body, time_bounds).await);
-        Outcome::Success(raw_body)
+        self.validate_with_hmac(req, body, time_bounds).await
     }
 }
 

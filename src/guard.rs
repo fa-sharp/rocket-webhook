@@ -15,7 +15,7 @@ use crate::{RocketWebhook, WebhookError, webhooks::Webhook};
 
 /**
  Data guard to validate and deserialize the JSON body of webhook type `W` into the `T` type.
- The `W` webhook type must be attached to Rocket using [RocketWebhookRegister](crate::RocketWebhookRegister).
+ The `W` webhook configuration must be in Rocket state using [RocketWebhook].
 ```
 use rocket::{post, serde::{Serialize, Deserialize}};
 use rocket_webhook::{WebhookPayload, webhooks::built_in::{GitHubWebhook}};
@@ -38,21 +38,21 @@ async fn github_route(
 }
 ```
 */
-pub struct WebhookPayload<'r, T, W, D = W> {
+pub struct WebhookPayload<'r, T, W, M = W> {
     /// The deserialized payload data
     pub data: T,
     /// The headers sent with the webhook request
     pub headers: &'r HeaderMap<'r>,
-    _marker: PhantomData<W>,
-    _discriminator: PhantomData<D>,
+    _webhook: PhantomData<W>,
+    _marker: PhantomData<M>,
 }
 
 #[async_trait]
-impl<'r, T, W, D> FromData<'r> for WebhookPayload<'r, T, W, D>
+impl<'r, T, W, M> FromData<'r> for WebhookPayload<'r, T, W, M>
 where
     T: DeserializeOwned,
     W: Webhook + Send + Sync + 'static,
-    D: Send + Sync + 'static,
+    M: Send + Sync + 'static,
 {
     type Error = WebhookError;
 
@@ -60,7 +60,7 @@ where
         req: &'r Request<'_>,
         data: rocket::Data<'r>,
     ) -> Outcome<'r, Self, Self::Error> {
-        let config: &RocketWebhook<W, D> = try_outcome!(get_webhook_from_state(req));
+        let config: &RocketWebhook<W, M> = try_outcome!(get_webhook_from_state(req));
         let body = data.open(config.max_body_size.bytes());
         let time_bounds = get_timestamp_bounds(config.timestamp_tolerance);
         let validated_body =
@@ -70,8 +70,8 @@ where
             Ok(data) => Outcome::Success(Self {
                 data,
                 headers: req.headers(),
+                _webhook: PhantomData,
                 _marker: PhantomData,
-                _discriminator: PhantomData,
             }),
             Err(e) => Outcome::Error((Status::BadRequest, WebhookError::Deserialize(e))),
         }
@@ -80,7 +80,7 @@ where
 
 /**
 Data guard to validate a webhook and get the raw body.
-The `W` webhook must be attached to Rocket using [RocketWebhookRegister](crate::RocketWebhookRegister).
+The `W` webhook configuration must be in Rocket state using [RocketWebhook].
 ```
 use rocket::{post, serde::{Serialize, Deserialize}};
 use rocket_webhook::{WebhookPayloadRaw, webhooks::built_in::{GitHubWebhook}};
@@ -98,20 +98,20 @@ async fn github_route(
 }
 ```
 */
-pub struct WebhookPayloadRaw<'r, W, D = W> {
+pub struct WebhookPayloadRaw<'r, W, M = W> {
     /// The raw payload data
     pub data: Vec<u8>,
     /// The headers sent with the webhook request
     pub headers: &'r HeaderMap<'r>,
-    _marker: PhantomData<W>,
-    _discriminator: PhantomData<D>,
+    _webhook: PhantomData<W>,
+    _marker: PhantomData<M>,
 }
 
 #[async_trait]
-impl<'r, W, D> FromData<'r> for WebhookPayloadRaw<'r, W, D>
+impl<'r, W, M> FromData<'r> for WebhookPayloadRaw<'r, W, M>
 where
     W: Webhook + Send + Sync + 'static,
-    D: Send + Sync + 'static,
+    M: Send + Sync + 'static,
 {
     type Error = WebhookError;
 
@@ -119,7 +119,7 @@ where
         req: &'r Request<'_>,
         data: rocket::Data<'r>,
     ) -> Outcome<'r, Self, Self::Error> {
-        let config: &RocketWebhook<W, D> = try_outcome!(get_webhook_from_state(req));
+        let config: &RocketWebhook<W, M> = try_outcome!(get_webhook_from_state(req));
         let body = data.open(config.max_body_size.bytes());
         let time_bounds = get_timestamp_bounds(config.timestamp_tolerance);
         let validated_body =
@@ -128,20 +128,20 @@ where
         Outcome::Success(Self {
             data: validated_body,
             headers: req.headers(),
+            _webhook: PhantomData,
             _marker: PhantomData,
-            _discriminator: PhantomData,
         })
     }
 }
 
-fn get_webhook_from_state<'r, W, D>(
+fn get_webhook_from_state<'r, W, M>(
     req: &'r Request,
-) -> Outcome<'r, &'r RocketWebhook<W, D>, WebhookError>
+) -> Outcome<'r, &'r RocketWebhook<W, M>, WebhookError>
 where
     W: Webhook + Send + Sync + 'static,
-    D: Send + Sync + 'static,
+    M: Send + Sync + 'static,
 {
-    match req.rocket().state::<RocketWebhook<W, D>>() {
+    match req.rocket().state::<RocketWebhook<W, M>>() {
         Some(config) => Outcome::Success(config),
         None => {
             return Outcome::Error((Status::InternalServerError, WebhookError::NotAttached));

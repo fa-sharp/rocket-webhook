@@ -12,23 +12,20 @@ use std::{collections::HashMap, env};
 
 use reqwest::Client;
 use rocket::{launch, post, routes};
-use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister, WebhookPayload, webhooks::built_in::GitHubWebhook,
-};
+use rocket_webhook::{RocketWebhook, WebhookPayload, webhooks::built_in::GitHubWebhook};
 use serde::Deserialize;
 
 #[launch]
 fn rocket() -> _ {
     let key = env::var("GITHUB_SECRET").expect("Env var GITHUB_WEBHOOK_SECRET is not set");
     let webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::builder().secret_key(key).build())
+        .webhook(GitHubWebhook::with_secret(key))
         .max_body_size(10 * 1024)
         .build();
-    let rocket = RocketWebhookRegister::new(rocket::build())
-        .add(webhook)
-        .register();
 
-    rocket.mount("/api", routes![github_endpoint])
+    rocket::build()
+        .manage(webhook)
+        .mount("/api", routes![github_endpoint])
 }
 
 #[post("/webhook/github", data = "<payload>")]

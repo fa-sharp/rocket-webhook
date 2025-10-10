@@ -16,27 +16,33 @@ get the raw body using [WebhookPayloadRaw].
 ```rust
 use rocket::{routes, post, serde::{Serialize, Deserialize}};
 use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister, WebhookPayload,
+    RocketWebhook, WebhookPayload,
     webhooks::built_in::{GitHubWebhook, SlackWebhook},
 };
 
-
 #[rocket::launch]
 fn rocket() -> _ {
+    // Build the webhook(s)
     let github_webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::builder().secret_key(b"my-github-secret").build())
+        .webhook(GitHubWebhook::with_secret(b"my-github-secret"))
         .build();
     let slack_webhook = RocketWebhook::builder()
-        .webhook(SlackWebhook::builder().secret_key(b"my-slack-secret").build())
+        .webhook(SlackWebhook::with_secret(b"my-slack-secret"))
         .build();
 
-    let rocket = rocket::build().mount("/", routes![github_route]);
-    let rocket = RocketWebhookRegister::new(rocket)
-        .add(github_webhook)
-        .add(slack_webhook)
-        .register();
+    // Store the webhook(s) in Rocket state
+    let rocket = rocket::build()
+        .manage(github_webhook)
+        .manage(slack_webhook)
+        .mount("/", routes![github_route]);
 
     rocket
+}
+
+/// JSON payload to deserialize
+#[derive(Debug, Serialize, Deserialize)]
+struct GithubPayload {
+    action: String,
 }
 
 // use the `WebhookPayload` data guard in a route handler
@@ -50,18 +56,13 @@ async fn github_route(
     "OK"
 }
 
-/// Payload to deserialize
-#[derive(Debug, Serialize, Deserialize)]
-struct GithubPayload {
-    action: String,
-}
 
 ```
 
 
 # Handling errors
 By default, the webhook data guards will return Bad Request (400) for invalid requests (e.g. missing headers) and
-Unauthorized (401) for signature validation failures. Rocket's error handlers can be overridden using
+Unauthorized (401) for signature validation failures. Rocket's error responses can be overridden using
 [catchers](https://rocket.rs/guide/v0.5/requests/#error-catchers) scoped to a specific path.
 
 If you need more control over how to
@@ -83,7 +84,7 @@ async fn github_route(
     match payload_result {
         Ok(payload) => (Status::Ok, "Yay!"),
         Err(err) => match err {
-            WebhookError::InvalidSignature(_) => (Status::Unauthorized, "Yikes!"),
+            WebhookError::Signature(_) => (Status::Unauthorized, "Yikes!"),
             _ => (Status::UnprocessableEntity, "Oof!")
         }
     }
@@ -104,34 +105,31 @@ between the two webhooks in Rocket's internal state.
 ```
 use rocket::{get, routes};
 use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister, WebhookPayloadRaw, webhooks::built_in::SlackWebhook,
+    RocketWebhook, WebhookPayloadRaw, webhooks::built_in::SlackWebhook,
 };
 
 // Create a marker struct for each account/key
 struct SlackAccount1;
 struct SlackAccount2;
 
-#[test]
 fn two_slack_accounts() {
-    let slack_1 = SlackWebhook::builder().secret_key("slack-1-secret").build();
-    let webhook_1 = RocketWebhook::builder()
-        .webhook(slack_1)
+    // Use the `builder_with_marker` function
+    let slack_1 = RocketWebhook::builder_with_marker()
+        .webhook(SlackWebhook::with_secret("slack-1-secret"))
         .marker(SlackAccount1) // pass in the marker here
         .build();
-    let slack_2 = SlackWebhook::builder().secret_key("slack-2-secret").build();
-    let webhook_2 = RocketWebhook::builder()
-        .webhook(slack_2)
+    let slack_2 = RocketWebhook::builder_with_marker()
+        .webhook(SlackWebhook::with_secret("slack-2-secret"))
         .marker(SlackAccount2) // pass in the marker here
         .build();
 
-    let rocket = RocketWebhookRegister::new(rocket::build())
-        .add_with_marker(webhook_1)
-        .add_with_marker(webhook_2)
-        .register()
+    let rocket = rocket::build()
+        .manage(slack_1)
+        .manage(slack_2)
         .mount("/", routes![slack1_route, slack2_route]);
 }
 
-// Use the marker as the last type parameter in the data guard:
+// Use the marker struct as the last type parameter in the data guard:
 
 #[get("/slack-1", data = "<payload>")]
 async fn slack1_route(payload: WebhookPayloadRaw<'_, SlackWebhook, SlackAccount1>) -> Vec<u8> {
@@ -147,8 +145,7 @@ async fn slack2_route(payload: WebhookPayloadRaw<'_, SlackWebhook, SlackAccount2
 
 use std::marker::PhantomData;
 
-use bon::Builder;
-use rocket::{Build, Rocket, async_trait, fairing};
+use bon::bon;
 
 mod error;
 mod guard;
@@ -166,110 +163,109 @@ Webhook configuration stored in Rocket state.
 ```
 use rocket::{Rocket, Build};
 use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister,
+    RocketWebhook,
     webhooks::built_in::{GitHubWebhook},
 };
 
 fn setup_webhooks(rocket: Rocket<Build>) -> Rocket<Build> {
     let github_webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::builder().secret_key(b"my-github-secret").build())
+        .webhook(GitHubWebhook::with_secret(b"my-github-secret"))
         .max_body_size(1024 * 10)
         .build();
-    let rocket = RocketWebhookRegister::new(rocket).add(github_webhook).register();
 
-    rocket
+    rocket.manage(github_webhook)
 }
 ```
 */
-#[derive(Builder)]
-pub struct RocketWebhook<W, D = W> {
-    /// The webhook to validate
+pub struct RocketWebhook<W, M = W>
+where
+    W: Webhook,
+{
     webhook: W,
-    /// The max body size of the webhook request in bytes (default: 64 KB)
-    #[builder(default = 1024 * 64)]
     max_body_size: u32,
-    /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
-    /// (default: 5 minutes in past, 15 seconds in future)
-    #[builder(default = (5 * 60, 15))]
+
     timestamp_tolerance: (u32, u32),
     /// A marker to distinguish between webhooks of the same type
-    #[builder(default, with = |d: D| PhantomData)]
-    _marker: PhantomData<D>,
+    marker: PhantomData<M>,
 }
 
-/**
-Utility to register webhooks with the Rocket instance
-
-# Example
-```
-use rocket::{Rocket, Build};
-use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister,
-    webhooks::built_in::{GitHubWebhook},
-};
-
-let rocket = rocket::build();
-let github_webhook = RocketWebhook::builder()
-    .webhook(GitHubWebhook::builder().secret_key(b"my-github-secret").build())
-    .build();
-let rocket = RocketWebhookRegister::new(rocket).add(github_webhook).register();
-```
-*/
-pub struct RocketWebhookRegister {
-    rocket: Rocket<Build>,
-}
-
-impl RocketWebhookRegister {
-    pub fn new(rocket: Rocket<Build>) -> Self {
-        Self { rocket }
-    }
-
-    /// Add a webhook
-    pub fn add<W>(mut self, webhook: RocketWebhook<W>) -> Self
-    where
-        W: Webhook + Send + Sync + 'static,
-    {
-        self.rocket = self
-            .rocket
-            .attach(RocketWebhookFairing {
-                name: webhook.webhook.name(),
-            })
-            .manage(webhook);
-        self
-    }
-
-    /// Add a webhook with a type marker (for using multiple webhooks of the same type)
-    pub fn add_with_marker<W, D>(mut self, webhook: RocketWebhook<W, D>) -> Self
-    where
-        W: Webhook + Send + Sync + 'static,
-        D: Send + Sync + 'static,
-    {
-        self.rocket = self
-            .rocket
-            .attach(RocketWebhookFairing {
-                name: webhook.webhook.name(),
-            })
-            .manage(webhook);
-        self
-    }
-
-    /// Finalize and return the Rocket instance
-    pub fn register(self) -> Rocket<Build> {
-        self.rocket
+#[bon]
+impl<W> RocketWebhook<W, W>
+where
+    W: Webhook,
+{
+    /// Build a webhook configuration
+    #[builder]
+    pub fn new(
+        /// The webhook to validate
+        webhook: W,
+        /// The max body size of the webhook request in bytes (default: 64 KB)
+        #[builder(default = 64 * 1024)]
+        max_body_size: u32,
+        /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
+        /// (default: 5 minutes in past, 15 seconds in future)
+        #[builder(default = (5 * 60, 15))]
+        timestamp_tolerance: (u32, u32),
+    ) -> RocketWebhook<W, W> {
+        RocketWebhook {
+            webhook,
+            max_body_size,
+            timestamp_tolerance,
+            marker: PhantomData::<W>,
+        }
     }
 }
 
-#[derive(Debug)]
-struct RocketWebhookFairing {
-    name: &'static str,
-}
+#[bon]
+impl<W, M> RocketWebhook<W, M>
+where
+    W: Webhook,
+{
+    /**
+    Build a webhook configuration with a given marker type, to distingiush between multiple
+    webhooks of the same type (e.g. multiple GitHub webhooks with different secret keys).
 
-#[async_trait]
-impl fairing::Fairing for RocketWebhookFairing {
-    fn info(&self) -> fairing::Info {
-        fairing::Info {
-            name: self.name,
-            kind: fairing::Kind::Ignite,
+    # Example
+
+    ```
+    use rocket_webhook::{
+        RocketWebhook,
+        webhooks::built_in::{GitHubWebhook},
+    };
+
+    struct GithubPR;
+    struct GithubIssue;
+
+    let webhook_1 = RocketWebhook::builder_with_marker()
+        .webhook(GitHubWebhook::with_secret("secret-1"))
+        .marker(GithubPR) // pass in marker here
+        .build();
+    let webhook_2 = RocketWebhook::builder_with_marker()
+        .webhook(GitHubWebhook::with_secret("secret-2"))
+        .marker(GithubIssue) // pass in marker here
+        .build();
+    ```
+    */
+    #[builder(start_fn(name = builder_with_marker, vis = "pub"), finish_fn = build, builder_type(vis = "pub"))]
+    fn new_with_marker(
+        /// The webhook to manage
+        webhook: W,
+        /// A marker struct to distinguish this webhook
+        #[builder(with = |marker: M| PhantomData)]
+        marker: PhantomData<M>,
+        /// The max body size of the webhook request in bytes (default: 64 KB)
+        #[builder(default = 64 * 1024)]
+        max_body_size: u32,
+        /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
+        /// (default: 5 minutes in past, 15 seconds in future)
+        #[builder(default = (5 * 60, 15))]
+        timestamp_tolerance: (u32, u32),
+    ) -> RocketWebhook<W, M> {
+        RocketWebhook {
+            webhook,
+            marker,
+            max_body_size,
+            timestamp_tolerance,
         }
     }
 }

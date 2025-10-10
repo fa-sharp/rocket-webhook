@@ -8,7 +8,7 @@ use rocket::{
     serde::json::{Json, json},
 };
 use rocket_webhook::{
-    RocketWebhook, RocketWebhookRegister, WebhookPayload, WebhookPayloadRaw,
+    RocketWebhook, WebhookPayload, WebhookPayloadRaw,
     webhooks::built_in::{
         DiscordWebhook, GitHubWebhook, SendGridWebhook, ShopifyWebhook, SlackWebhook,
         StripeWebhook, SvixWebhook,
@@ -34,13 +34,12 @@ async fn github_route(
 #[test]
 fn github() {
     let github_webhook = RocketWebhook::builder()
-        .webhook(GitHubWebhook::builder().secret_key(b"test-secret").build())
+        .webhook(GitHubWebhook::with_secret(b"test-secret"))
         .build();
 
-    let rocket = rocket::build().mount("/", routes![github_route]);
-    let rocket = RocketWebhookRegister::new(rocket)
-        .add(github_webhook)
-        .register();
+    let rocket = rocket::build()
+        .manage(github_webhook)
+        .mount("/", routes![github_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = json!({"action": "opened"});
@@ -76,16 +75,14 @@ async fn slack_route(payload: WebhookPayloadRaw<'_, SlackWebhook>) -> Vec<u8> {
 
 #[test]
 fn slack() {
-    let slack_webhook = SlackWebhook::builder()
-        .secret_key(b"8f742231b10e8888abcd99yyyzzz85a5")
-        .build();
     let webhook = RocketWebhook::builder()
-        .webhook(slack_webhook)
+        .webhook(SlackWebhook::with_secret(
+            b"8f742231b10e8888abcd99yyyzzz85a5",
+        ))
         .timestamp_tolerance(IGNORE_TIMESTAMP)
         .build();
-    let rocket = RocketWebhookRegister::new(rocket::build())
-        .add(webhook)
-        .register()
+    let rocket = rocket::build()
+        .manage(webhook)
         .mount("/", routes![slack_route]);
 
     let client = Client::tracked(rocket).unwrap();
@@ -129,10 +126,12 @@ async fn shopify_route(payload: WebhookPayloadRaw<'_, ShopifyWebhook>) -> Vec<u8
 
 #[test]
 fn shopify() {
-    let shopify_webhook = ShopifyWebhook::builder().secret_key("test-secret").build();
-    let webhook = RocketWebhook::builder().webhook(shopify_webhook).build();
-    let rocket = rocket::build().mount("/", routes![shopify_route]);
-    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
+    let webhook = RocketWebhook::builder()
+        .webhook(ShopifyWebhook::with_secret("test-secret"))
+        .build();
+    let rocket = rocket::build()
+        .manage(webhook)
+        .mount("/", routes![shopify_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = "hello shopify";
@@ -162,13 +161,13 @@ async fn stripe_route(
 
 #[test]
 fn stripe() {
-    let stripe_webhook = StripeWebhook::builder().secret_key("test-secret").build();
     let webhook = RocketWebhook::builder()
         .timestamp_tolerance(IGNORE_TIMESTAMP)
-        .webhook(stripe_webhook)
+        .webhook(StripeWebhook::with_secret("test-secret"))
         .build();
-    let rocket = rocket::build().mount("/", routes![stripe_route]);
-    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
+    let rocket = rocket::build()
+        .manage(webhook)
+        .mount("/", routes![stripe_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = json!({
@@ -203,16 +202,13 @@ async fn discord_route(payload: WebhookPayloadRaw<'_, DiscordWebhook>) -> Vec<u8
 #[test]
 fn discord() {
     let public_key = "25B573092C76A64F7588FDDF76CD7C53774099C163A53A039D314C0EBD323C92";
-    let discord_webhook = DiscordWebhook::builder()
-        .public_key(public_key)
-        .build()
-        .expect("should be valid hex");
     let webhook = RocketWebhook::builder()
         .timestamp_tolerance(IGNORE_TIMESTAMP)
-        .webhook(discord_webhook)
+        .webhook(DiscordWebhook::with_public_key(public_key).expect("should be valid hex"))
         .build();
-    let rocket = rocket::build().mount("/", routes![discord_route]);
-    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
+    let rocket = rocket::build()
+        .manage(webhook)
+        .mount("/", routes![discord_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = "hello discord";
@@ -238,16 +234,13 @@ fn sendgrid_route(payload: WebhookPayloadRaw<'_, SendGridWebhook>) -> Vec<u8> {
 fn sendgrid() {
     let public_key =
         "BP2InNqs4PwaKQTVLNqebVaY+KApaBF6y2bQhtFLadUpBMLOgkYEwLXML5TkGE80EHJyH3uNd2K2pdRaQbFqFE0=";
-    let sendgrid_webhook = SendGridWebhook::builder()
-        .public_key(public_key)
-        .build()
-        .expect("should be valid base64");
     let webhook = RocketWebhook::builder()
         .timestamp_tolerance(IGNORE_TIMESTAMP)
-        .webhook(sendgrid_webhook)
+        .webhook(SendGridWebhook::with_public_key(public_key).expect("is base64"))
         .build();
-    let rocket = rocket::build().mount("/", routes![sendgrid_route]);
-    let rocket = RocketWebhookRegister::new(rocket).add(webhook).register();
+    let rocket = rocket::build()
+        .manage(webhook)
+        .mount("/", routes![sendgrid_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = "hello sendgrid";
@@ -283,18 +276,12 @@ struct SvixPayload {
 
 #[test]
 fn svix() {
-    let svix_webhook = SvixWebhook::builder()
-        .secret_key("whsec_x9J8mHVs08bY9qRsE3un7nW8")
-        .build()
-        .expect("should be valid base64");
-    let rocket = RocketWebhookRegister::new(rocket::build())
-        .add(
-            RocketWebhook::builder()
-                .timestamp_tolerance(IGNORE_TIMESTAMP)
-                .webhook(svix_webhook)
-                .build(),
-        )
-        .register()
+    let svix_webhook = RocketWebhook::builder()
+        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .webhook(SvixWebhook::with_secret("whsec_x9J8mHVs08bY9qRsE3un7nW8").expect("is base64"))
+        .build();
+    let rocket = rocket::build()
+        .manage(svix_webhook)
         .mount("/", routes![svix_route]);
 
     let client = Client::tracked(rocket).unwrap();

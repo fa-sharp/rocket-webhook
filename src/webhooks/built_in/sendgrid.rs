@@ -1,5 +1,4 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use bon::bon;
 use rocket::{data::Outcome, http::Status, outcome::try_outcome};
 use tokio_util::bytes::{Bytes, BytesMut};
 
@@ -18,36 +17,25 @@ use crate::{
 ///
 /// [SendGrid docs](https://www.twilio.com/docs/sendgrid/for-developers/tracking-events/getting-started-event-webhook-security-features#verify-the-signature)
 pub struct SendGridWebhook {
-    name: &'static str,
     public_key: Bytes,
 }
 
-#[bon]
 impl SendGridWebhook {
-    #[builder]
-    pub fn new(
-        #[builder(default = "SendGrid webhook")] name: &'static str,
-        /// The base64 public key from SendGrid
-        public_key: impl AsRef<str>,
-    ) -> Result<Self, base64::DecodeError> {
+    /// Instantiate using the base64 public key from SendGrid
+    pub fn with_public_key(public_key: impl AsRef<str>) -> Result<Self, base64::DecodeError> {
         let public_key = Bytes::from(BASE64_STANDARD.decode(public_key.as_ref())?);
-        Ok(Self { name, public_key })
+        Ok(Self { public_key })
     }
 }
 
 impl Webhook for SendGridWebhook {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
     async fn validate_body(
         &self,
         req: &rocket::Request<'_>,
         body: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
         time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
-        let raw_body = try_outcome!(self.validate_with_public_key(req, body, time_bounds).await);
-        Outcome::Success(raw_body)
+        self.validate_with_public_key(req, body, time_bounds).await
     }
 }
 

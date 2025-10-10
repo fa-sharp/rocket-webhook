@@ -25,7 +25,8 @@ pub trait WebhookHmac: Webhook {
     /// you can use the `self.get_header()` utility.
     fn expected_signatures(&self, req: &Request<'_>) -> Outcome<'_, Vec<Vec<u8>>, WebhookError>;
 
-    /// An optional prefix to attach to the raw body when calculating the signature
+    /// Get an optional prefix to attach to the raw body when calculating the signature. Timestamps
+    /// should be validated against the given bounds.
     #[allow(unused_variables)]
     fn body_prefix(
         &self,
