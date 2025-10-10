@@ -7,7 +7,7 @@ on:
       - Cargo.toml
       - Cargo.lock
 env:
-  RUST_VERSION: 1.90
+  RUST_VERSION: "1.90"
 
 jobs:
   test:
