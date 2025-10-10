@@ -11,15 +11,13 @@ Streamlined webhook validation for Rocket applications, with built-in support fo
 - Automatic signature validation for webhook requests
 - Easy Rocket integration using `.manage()` and data guards
 - Deserialize JSON payloads or work with the raw responses
-- Built-in support for popular webhook providers
+- Built-in support for popular webhook providers and signatures
 - Automatic timestamp validation for replay attack prevention
-- Streaming HMAC validation for memory efficiency
-- Multiple authentication methods (HMAC, Ed25519, ECDSA)
 
 ## Supported Webhooks
 - GitHub, Stripe, Slack, Shopify, Discord, SendGrid, Svix
 
-You can also easily add your own webhook by implementing the Webhook trait and one of the authentication traits (HMAC or Public Key).
+You can also easily add your own webhook by implementing one of the signature traits ([WebhookHmac](src/webhooks/interface/hmac.rs) or [WebhookPublicKey](src/webhooks/interface/public_key.rs)) and the [Webhook](src/webhooks.rs) trait. See the `src/webhooks/built_in` folder for examples.
 
 ## Quick Start
 
