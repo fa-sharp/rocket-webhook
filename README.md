@@ -1,6 +1,7 @@
 # Rocket Webhook
 [![CI](https://github.com/fa-sharp/rocket-webhook/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-sharp/rocket-webhook/actions/workflows/ci.yml)
-<!--[![Crates.io Version](https://img.shields.io/crates/v/rocket_webhook)](https://crates.io/crates/rocket_webhook)-->
+[![Crates.io Version](https://img.shields.io/crates/v/rocket-webhook)](https://crates.io/crates/rocket-webhook)
+
 
 ⚠️ **This crate is in alpha and may not work as expected yet.**
 
