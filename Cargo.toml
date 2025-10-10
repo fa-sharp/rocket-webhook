@@ -7,11 +7,9 @@ homepage = "https://github.com/fa-sharp/rocket-webhook"
 repository = "https://github.com/fa-sharp/rocket-webhook"
 license = "MIT"
 keywords = [
-  "authentication",
   "ecdsa",
   "hmac",
   "rocket",
-  "security",
   "validation",
   "webhook",
 ]
