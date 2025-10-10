@@ -38,7 +38,7 @@ pub trait WebhookPublicKey: Webhook {
     ) -> impl Future<Output = Outcome<'_, Bytes, WebhookError>> + Send + Sync;
 
     /// Get the expected signature from the request
-    fn expected_signature<'r>(&self, req: &'r Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError>;
+    fn expected_signature(&self, req: &Request<'_>) -> Outcome<'_, Vec<u8>, WebhookError>;
 
     /// Get the message that needs to be verified. Any adjustments can be made to the body here
     /// before calculating the signature (e.g. prefixes or hashes, etc.)
