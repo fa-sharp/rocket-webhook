@@ -1,6 +1,6 @@
 # Rocket Webhook
-[![CI](https://github.com/fa-sharp/rocket-flex-session/actions/workflows/lib.yml/badge.svg)](https://github.com/fa-sharp/rocket-flex-session/actions/workflows/lib.yml)
-[![Crates.io Version](https://img.shields.io/crates/v/rocket_flex_session)](https://crates.io/crates/rocket_flex_session)
+[![CI](https://github.com/fa-sharp/rocket-webhook/actions/workflows/lib.yml/badge.svg)](https://github.com/fa-sharp/rocket-webhook/actions/workflows/lib.yml)
+<!--[![Crates.io Version](https://img.shields.io/crates/v/rocket_webhook)](https://crates.io/crates/rocket_webhook)-->
 
 ⚠️ **This crate is in alpha and may not work as expected yet.**
 
