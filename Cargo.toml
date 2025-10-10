@@ -2,7 +2,25 @@
 name = "rocket-webhook"
 version = "0.1.0-alpha.1"
 edition = "2024"
+description = "Webhook validation for Rocket applications"
+homepage = "https://github.com/fa-sharp/rocket-webhook"
+repository = "https://github.com/fa-sharp/rocket-webhook"
 license = "MIT"
+keywords = [
+  "authentication",
+  "ecdsa",
+  "hmac",
+  "rocket",
+  "security",
+  "validation",
+  "webhook",
+]
+categories = [
+  "authentication",
+  "web-programming",
+  "web-programming::http-server",
+]
+exclude = [".config/", ".github/"]
 
 [dependencies]
 base64 = { version = "0.22", optional = true }

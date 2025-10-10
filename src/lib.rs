@@ -5,7 +5,7 @@
 # Overview
 ⚠️ This crate is in development and may not work as expected yet.
 
-Utilities for working with webhooks in Rocket applications.
+Streamlined webhook validation in Rocket applications.
 
 - Automatically validate and deserialize webhook JSON payloads using the [WebhookPayload] data guard. You can also
 get the raw body using [WebhookPayloadRaw].
