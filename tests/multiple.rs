@@ -2,23 +2,21 @@
 
 use rocket::{get, http::Header, local::blocking::Client, routes};
 use rocket_webhook::{RocketWebhook, WebhookPayloadRaw, webhooks::built_in::SlackWebhook};
-/// Time bounds to ignore timestamp for these tests (allow 20 years in past)
-const IGNORE_TIMESTAMP: (u32, u32) = (20 * 365 * 24 * 60 * 60, 0);
+
+const IGNORE_TIMESTAMP: (u32, u32) = (u32::MAX, 0);
 
 struct SlackAccount1;
 struct SlackAccount2;
 
 #[test]
 fn two_slack_accounts() {
-    let slack_1 = SlackWebhook::with_secret("slack-1-secret");
     let webhook_1 = RocketWebhook::builder_with_marker()
-        .webhook(slack_1)
+        .webhook(SlackWebhook::with_secret("slack-1-secret"))
         .marker(SlackAccount1)
         .timestamp_tolerance(IGNORE_TIMESTAMP)
         .build();
-    let slack_2 = SlackWebhook::with_secret("slack-2-secret");
     let webhook_2 = RocketWebhook::builder_with_marker()
-        .webhook(slack_2)
+        .webhook(SlackWebhook::with_secret("slack-2-secret"))
         .marker(SlackAccount2)
         .timestamp_tolerance(IGNORE_TIMESTAMP)
         .build();

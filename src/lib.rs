@@ -184,9 +184,7 @@ where
 {
     webhook: W,
     max_body_size: u32,
-
     timestamp_tolerance: (u32, u32),
-    /// A marker to distinguish between webhooks of the same type
     marker: PhantomData<M>,
 }
 
@@ -200,7 +198,7 @@ where
     pub fn new(
         /// The webhook to validate
         webhook: W,
-        /// The max body size of the webhook request in bytes (default: 64 KB)
+        /// The maximum allowed body size of the webhook request in bytes (default: 64 KB)
         #[builder(default = 64 * 1024)]
         max_body_size: u32,
         /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
@@ -248,13 +246,13 @@ where
     ```
     */
     #[builder(start_fn(name = builder_with_marker, vis = "pub"), finish_fn = build, builder_type(vis = "pub"))]
-    fn new_with_marker(
-        /// The webhook to manage
+    fn with_marker(
+        /// The webhook to validate
         webhook: W,
-        /// A marker struct to distinguish this webhook
+        /// A marker struct to distinguish this webhook from other webhooks of the same type
         #[builder(with = |marker: M| PhantomData)]
         marker: PhantomData<M>,
-        /// The max body size of the webhook request in bytes (default: 64 KB)
+        /// The maximum allowed body size of the webhook request in bytes (default: 64 KB)
         #[builder(default = 64 * 1024)]
         max_body_size: u32,
         /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid

@@ -149,10 +149,20 @@ where
     }
 }
 
+/// Get the timestamp bounds based on the current unix epoch time in seconds
 fn get_timestamp_bounds((past_secs, future_secs): (u32, u32)) -> (u32, u32) {
     let unix_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs() as u32; // Safe to use u32 until 2106
-    (unix_time - past_secs, unix_time + future_secs)
+    let lower_bound = {
+        if past_secs > unix_time {
+            0
+        } else {
+            unix_time - past_secs
+        }
+    };
+    let upper_bound = unix_time + future_secs;
+
+    (lower_bound, upper_bound)
 }
