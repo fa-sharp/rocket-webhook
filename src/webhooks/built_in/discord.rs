@@ -1,5 +1,5 @@
 use hex::FromHexError;
-use rocket::{data::Outcome, http::Status, outcome::try_outcome};
+use rocket::{data::Outcome, http::Status, outcome::try_outcome, tokio::io::AsyncRead};
 use tokio_util::bytes::{Bytes, BytesMut};
 
 use crate::{
@@ -32,7 +32,7 @@ impl Webhook for DiscordWebhook {
     async fn validate_body(
         &self,
         req: &rocket::Request<'_>,
-        body: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
+        body: impl AsyncRead + Unpin + Send + Sync,
         time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
         self.validate_with_public_key(req, body, time_bounds).await

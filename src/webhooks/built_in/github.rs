@@ -1,5 +1,5 @@
 use hmac::Hmac;
-use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome};
+use rocket::{Request, data::Outcome, http::Status, outcome::try_outcome, tokio::io::AsyncRead};
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
@@ -29,7 +29,7 @@ impl Webhook for GitHubWebhook {
     async fn validate_body(
         &self,
         req: &Request<'_>,
-        body: impl rocket::tokio::io::AsyncRead + Unpin + Send + Sync,
+        body: impl AsyncRead + Unpin + Send + Sync,
         time_bounds: (u32, u32),
     ) -> Outcome<'_, Vec<u8>, WebhookError> {
         self.validate_with_hmac(req, body, time_bounds).await

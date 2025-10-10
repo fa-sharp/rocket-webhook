@@ -1,7 +1,8 @@
 [package]
 name = "rocket-webhook"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 base64 = { version = "0.22", optional = true }
