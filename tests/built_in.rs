@@ -11,7 +11,7 @@ use rocket_webhook::{
     RocketWebhook, WebhookPayload, WebhookPayloadRaw,
     webhooks::built_in::{
         DiscordWebhook, GitHubWebhook, SendGridWebhook, ShopifyWebhook, SlackWebhook,
-        StripeWebhook, SvixWebhook,
+        StandardWebhook, StripeWebhook,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -262,26 +262,28 @@ fn sendgrid() {
     assert_eq!(response.into_string(), Some(payload.into()));
 }
 
-#[post("/svix", data = "<payload>")]
-async fn svix_route(payload: WebhookPayload<'_, SvixPayload, SvixWebhook>) -> Json<SvixPayload> {
+#[post("/standard", data = "<payload>")]
+async fn standard_route(
+    payload: WebhookPayload<'_, StandardPayload, StandardWebhook>,
+) -> Json<StandardPayload> {
     Json(payload.data)
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct SvixPayload {
+struct StandardPayload {
     event_type: String,
     success: bool,
 }
 
 #[test]
-fn svix() {
-    let svix_webhook = RocketWebhook::builder()
+fn standard() {
+    let standard_webhook = RocketWebhook::builder()
         .timestamp_tolerance(IGNORE_TIMESTAMP, 0)
-        .webhook(SvixWebhook::with_secret("whsec_x9J8mHVs08bY9qRsE3un7nW8").expect("is base64"))
+        .webhook(StandardWebhook::with_secret("whsec_x9J8mHVs08bY9qRsE3un7nW8").expect("is base64"))
         .build();
     let rocket = rocket::build()
-        .manage(svix_webhook)
-        .mount("/", routes![svix_route]);
+        .manage(standard_webhook)
+        .mount("/", routes![standard_route]);
 
     let client = Client::tracked(rocket).unwrap();
     let payload = json!({ "event_type":"ping", "success":true});
@@ -289,17 +291,17 @@ fn svix() {
     let timestamp = "1759933695";
     let signature = "v1,vaXhsxOg6d11zKvCs7dg/PxN9dXETpdbalU1o3J66K4= v1,waXhsxOg6d11zKvCs7dg/PxN9dXETpdbalU1o3J66K4=";
     let response = client
-        .post("/svix")
-        .header(Header::new("Svix-Id", id))
-        .header(Header::new("Svix-Timestamp", timestamp))
-        .header(Header::new("Svix-Signature", signature))
+        .post("/standard")
+        .header(Header::new("Webhook-Id", id))
+        .header(Header::new("Webhook-Timestamp", timestamp))
+        .header(Header::new("Webhook-Signature", signature))
         .json(&payload)
         .dispatch();
 
     assert_eq!(response.status(), Status::Ok);
     assert_eq!(
         response.into_json(),
-        Some(SvixPayload {
+        Some(StandardPayload {
             event_type: "ping".into(),
             success: true
         })

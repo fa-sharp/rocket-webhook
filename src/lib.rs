@@ -9,7 +9,7 @@ Streamlined webhook validation in Rocket applications.
 
 - Automatically validate and deserialize webhook JSON payloads using the [WebhookPayload] data guard. You can also
 get the raw body using [WebhookPayloadRaw].
-- [Common webhooks](webhooks::built_in) included (GitHub, Slack, Stripe)
+- [Common webhooks](webhooks::built_in) included (GitHub, Slack, Stripe, Standard)
 - Easily validate custom webhooks with one of the generic builders
 
 # Usage

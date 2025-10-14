@@ -30,7 +30,7 @@ mod stripe;
 #[cfg(feature = "stripe")]
 pub use stripe::StripeWebhook;
 
-#[cfg(feature = "svix")]
-mod svix;
-#[cfg(feature = "svix")]
-pub use svix::SvixWebhook;
+#[cfg(feature = "standard")]
+mod standard;
+#[cfg(feature = "standard")]
+pub use standard::StandardWebhook;
