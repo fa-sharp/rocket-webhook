@@ -1,6 +1,6 @@
 [package]
 name = "rocket-webhook"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2024"
 description = "Webhook validation for Rocket applications"
 homepage = "https://github.com/fa-sharp/rocket-webhook"
