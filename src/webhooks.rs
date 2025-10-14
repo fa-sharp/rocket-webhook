@@ -5,6 +5,7 @@ use rocket::{Request, data::Outcome, http::Status, tokio::io::AsyncRead};
 use crate::WebhookError;
 
 pub mod built_in;
+pub mod generic;
 pub mod interface;
 
 mod utils;

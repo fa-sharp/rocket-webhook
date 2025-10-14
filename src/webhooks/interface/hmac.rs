@@ -36,6 +36,17 @@ pub trait WebhookHmac: Webhook {
         Outcome::Success(None)
     }
 
+    /// Get an optional suffix to attach to the raw body when calculating the signature. Timestamps
+    /// should be validated against the given bounds.
+    #[allow(unused_variables)]
+    fn body_suffix(
+        &self,
+        req: &Request<'_>,
+        time_bounds: (u32, u32),
+    ) -> Outcome<'_, Option<Vec<u8>>, WebhookError> {
+        Outcome::Success(None)
+    }
+
     /// Read the request body and verify the HMAC signature. Calculates the HMAC
     /// directly from the raw streamed body (with a prefix if configured).
     fn validate_with_hmac(
@@ -75,6 +86,11 @@ pub trait WebhookHmac: Webhook {
                         return Outcome::Error((Status::BadRequest, WebhookError::Read(e)));
                     }
                 }
+            }
+
+            // Update HMAC with suffix if there is one
+            if let Some(suffix) = try_outcome!(self.body_suffix(req, time_bounds)) {
+                mac.update(&suffix);
             }
 
             // Check HMAC against all provided signatures

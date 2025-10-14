@@ -16,7 +16,7 @@ use rocket_webhook::{
 };
 use serde::{Deserialize, Serialize};
 
-const IGNORE_TIMESTAMP: (u32, u32) = (u32::MAX, 0);
+const IGNORE_TIMESTAMP: u32 = u32::MAX;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct GithubPayload {
@@ -78,7 +78,7 @@ fn slack() {
         .webhook(SlackWebhook::with_secret(
             b"8f742231b10e8888abcd99yyyzzz85a5",
         ))
-        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .timestamp_tolerance(IGNORE_TIMESTAMP, 0)
         .build();
     let rocket = rocket::build()
         .manage(webhook)
@@ -161,7 +161,7 @@ async fn stripe_route(
 #[test]
 fn stripe() {
     let webhook = RocketWebhook::builder()
-        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .timestamp_tolerance(IGNORE_TIMESTAMP, 0)
         .webhook(StripeWebhook::with_secret("test-secret"))
         .build();
     let rocket = rocket::build()
@@ -202,7 +202,7 @@ async fn discord_route(payload: WebhookPayloadRaw<'_, DiscordWebhook>) -> Vec<u8
 fn discord() {
     let public_key = "25B573092C76A64F7588FDDF76CD7C53774099C163A53A039D314C0EBD323C92";
     let webhook = RocketWebhook::builder()
-        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .timestamp_tolerance(IGNORE_TIMESTAMP, 0)
         .webhook(DiscordWebhook::with_public_key(public_key).expect("should be valid hex"))
         .build();
     let rocket = rocket::build()
@@ -234,7 +234,7 @@ fn sendgrid() {
     let public_key =
         "BP2InNqs4PwaKQTVLNqebVaY+KApaBF6y2bQhtFLadUpBMLOgkYEwLXML5TkGE80EHJyH3uNd2K2pdRaQbFqFE0=";
     let webhook = RocketWebhook::builder()
-        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .timestamp_tolerance(IGNORE_TIMESTAMP, 0)
         .webhook(SendGridWebhook::with_public_key(public_key).expect("is base64"))
         .build();
     let rocket = rocket::build()
@@ -276,7 +276,7 @@ struct SvixPayload {
 #[test]
 fn svix() {
     let svix_webhook = RocketWebhook::builder()
-        .timestamp_tolerance(IGNORE_TIMESTAMP)
+        .timestamp_tolerance(IGNORE_TIMESTAMP, 0)
         .webhook(SvixWebhook::with_secret("whsec_x9J8mHVs08bY9qRsE3un7nW8").expect("is base64"))
         .build();
     let rocket = rocket::build()

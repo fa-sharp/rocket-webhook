@@ -2,19 +2,19 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 /*!
-# Overview
 ⚠️ This crate is in development and may not work as expected yet.
+# Overview
 
 Streamlined webhook validation in Rocket applications.
 
 - Automatically validate and deserialize webhook JSON payloads using the [WebhookPayload] data guard. You can also
 get the raw body using [WebhookPayloadRaw].
 - [Common webhooks](webhooks::built_in) included (GitHub, Slack, Stripe)
-- Custom webhook validation possible by implementing the [Webhook] trait.
+- Easily validate custom webhooks with one of the generic builders
 
 # Usage
 
-```rust
+```
 use rocket::{routes, post, serde::{Serialize, Deserialize}};
 use rocket_webhook::{
     RocketWebhook, WebhookPayload,
@@ -60,6 +60,31 @@ async fn github_route(
 
 ```
 
+# Custom webhooks
+If you're using a webhook provider that is not built-in, there are two ways to integrate them:
+
+## Use generic builder
+This is the preferred (and simpler) approach - use one of [the generic webhook builders](webhooks::generic) to build a webhook
+for your provider/service. For example, here is a custom webhook that expects a hex-encoded HMAC SHA256 signature
+in the `Foo-Signature-256` header.
+
+```
+use rocket_webhook::{WebhookError, webhooks::generic::Hmac256Webhook};
+
+let my_webhook = Hmac256Webhook::builder()
+    .secret("my-secret")
+    .expected_signatures(|req| {
+        req.headers()
+            .get_one("Foo-Signature-256")
+            .and_then(|header| hex::decode(header).ok())
+            .map(|header| vec![header])
+    })
+    .build();
+```
+
+## Implement webhook traits
+If a generic builder is not available, you can directly implement one of the [signature traits](webhooks::interface)
+along with the [Webhook](src/webhooks.rs) trait. See the implementations in [webhooks::built_in] for examples.
 
 # Handling errors
 By default, the webhook data guards will return Bad Request (400) for invalid requests (e.g. missing headers) and
@@ -98,8 +123,8 @@ struct GithubPayload {
 }
 ```
 
-# Multiple with same provider
-If you want to receive webhooks using multiple accounts/keys from the same provider, you'll need to pass
+# Multiple with same type
+If you want to receive webhooks using multiple accounts/keys from the same built-in or generic webhook, you'll need to pass
 in a marker struct when building the webhooks and using the data guards. This is needed to distinguish
 between the two webhooks in Rocket's internal state.
 
@@ -203,7 +228,7 @@ where
         max_body_size: u32,
         /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
         /// (default: 5 minutes in past, 15 seconds in future)
-        #[builder(default = (5 * 60, 15))]
+        #[builder(default = (5 * 60, 15), with = |past_secs: u32, future_secs: u32| (past_secs, future_secs))]
         timestamp_tolerance: (u32, u32),
     ) -> RocketWebhook<W, W> {
         RocketWebhook {
@@ -257,7 +282,7 @@ where
         max_body_size: u32,
         /// For webhooks that use a timestamp, how many seconds in the past and future is allowed to be valid
         /// (default: 5 minutes in past, 15 seconds in future)
-        #[builder(default = (5 * 60, 15))]
+        #[builder(default = (5 * 60, 15), with = |past_secs: u32, future_secs: u32| (past_secs, future_secs))]
         timestamp_tolerance: (u32, u32),
     ) -> RocketWebhook<W, M> {
         RocketWebhook {

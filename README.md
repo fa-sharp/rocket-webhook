@@ -18,7 +18,8 @@ Streamlined webhook validation for Rocket applications, with built-in support fo
 ## Supported Webhooks
 - GitHub, Stripe, Slack, Shopify, Discord, SendGrid, Svix
 
-You can also easily add your own webhook by implementing one of the signature traits ([WebhookHmac](src/webhooks/interface/hmac.rs) or [WebhookPublicKey](src/webhooks/interface/public_key.rs)) and the [Webhook](src/webhooks.rs) trait. See the `src/webhooks/built_in` folder for examples.
+You can use another webhook by utilizing one of the [generic implementations](src/webhooks/generic),
+or implementing one of the signature traits ([WebhookHmac](src/webhooks/interface/hmac.rs) or [WebhookPublicKey](src/webhooks/interface/public_key.rs)) along with the [Webhook](src/webhooks.rs) trait. See the `src/webhooks/built_in` folder for examples.
 
 ## Quick Start
 
